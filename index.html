@@ -1011,6 +1011,162 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 })();
 </script>
 <script>(function () {
+  var A = window.APP = window.APP || {};
+  /* Norma Técnica Forestal sobre diámetros mínimos de cortabilidad (Gaceta Oficial, 11 de junio de 2009), art. 3.
+     Grupo a: duras (densidad >= 0,75 g/cm3), DMC >= 50 cm. Grupo b: semiduras (0,56 a 0,74), DMC >= 60 cm.
+     Grupo c: blandas (<= 0,55), DMC >= 70 cm. Formato: nombres comunes | científico. */
+  var RAW = {
+    50: [
+      "Canalete amarillo|Aspidosperma sp", "Gateado|Astronium graveolens", "Mangle negro, Llorón|Avicennia nitida", "Hierrillo, Hierillo|Aspidosperma megalocarpon",
+      "Charo|Brosimum alicastrum", "Vera|Bulnesia arborea", "Dividive|Caesalpinia coriaria", "Caimito morado|Chrysophyllum cainito", "Caicareño|Clathrotropis brachypetala",
+      "Congrio negro|Diplotropis purpurea", "Majaguillo|Eschweilera subglandulosa", "Guacharaco|Eschweilera chartacea", "Cacaito|Eschweilera parviflora",
+      "Caruto|Genipa americana", "Algarrobo|Hymenaea courbaril", "Tinajito|Lecythis davisii", "Almidón|Licania discolor", "Jebe, Mahomo|Lonchocarpus spp",
+      "Mora|Maclura tinctoria", "Purgüo|Manilkara bidentata", "Perhuétano|Mouriri barinensis", "Zapatero nazareno|Peltogyne paniculata",
+      "Zapatero blanco|Peltogyne porphyrocardia", "Caramacate|Piranhea trifoliolata", "Roble|Platymiscium pinnatum", "Chupón|Pouteria reticulata",
+      "Capure|Pouteria pomifera", "Mangle rojo|Rhizophora harrisonii", "Mangle rojo-colorado, Mangle colorado|Rhizophora mangle", "Mangle rojo|Rhizophora racemosa",
+      "Puy|Tabebuia impetiginosa"
+    ],
+    60: [
+      "Pilón|Andira inermis", "Pata de zamuro|Astronium ulei", "Carapa|Carapa guianensis", "Cartán|Centrolobium paraense", "Aceite|Copaifera officinalis",
+      "Caujaro|Cordia dentata", "Pardillo blanco|Cordia alliodora", "Kerosene|Drypetes variabilis", "Carne asada|Hyeronima laxiflora", "Guamo|Inga spp",
+      "Coco de mono|Lecythis ollaria", "Veleto|Licania arborea", "Picatón|Loxopterygium sagotii", "Laurel|Nectandra rigida", "Pericoco|Ormosia coarctata",
+      "Peonío|Ormosia paraensis", "Merecurillo|Parinari excelsa", "Clavellino|Pentaclethra macroloba", "Yiguire|Piptadenia psilostachya",
+      "Samán montañero|Pithecellobium guachapele", "Sipuede|Protium subserratum", "Anime rosado|Protium tenuifolium", "Palo de agua|Symmeria paniculata",
+      "Pata de danta|Terminalia amazonia", "Guayabón|Terminalia guyanensis", "Maro|Trattinickia rhoifolia", "Tambor|Vochysia lehmannii"
+    ],
+    70: [
+      "Carabalí|Albizia colombiana", "Merey montañero|Anacardium giganteum", "Leche de cochino|Alexa imperatricis", "Cachicamo|Calophyllum brasiliense",
+      "Baramán|Catostemma commune", "Ceiba|Ceiba pentandra", "Alatrique|Cordia fallax", "Bototo|Cochlospermum orinocense", "Caujaro|Cordia bicolor",
+      "Capa de tabaco|Couratari pulchra", "Canelón|Croton xanthochloros", "Máramo|Dendropanax arboreum", "Sunsún|Didymopanax morototoni",
+      "Caro-caro, Caro caro|Enterolobium cyclocarpum", "Mureillo|Erisma uncinatum", "Bucare|Erythrina poeppigiana", "Trompillo|Guarea guidonia",
+      "Jabillo|Hura crepitans", "Guamo negro|Inga capitata", "Guácimo cimarrón|Luehea candida", "Balso|Ochroma pyramidale", "Laurel negro|Ocotea glomerata",
+      "Caro montañero|Parkia oppositifolia", "Amarillo|Pera schomburgkiana", "Anime blanco|Protium crenatum", "Anoncillo|Rollinia fendleri",
+      "Lechero|Sapium aubletianum", "Hueso de pescado|Simaba multiflora", "Cedro blanco|Simarouba amara", "Josefino|Stryphnodendron guianensis",
+      "Masaguaro|Stryphnodendron polystachyum", "Camoruco|Sterculia apetala", "Majagua|Sterculia pruriens", "Charo negro|Sorocea sprucei", "Apamate|Tabebuia rosea",
+      "Casabe|Torrubia cuspidata", "Maro|Trattinickia rhoifolia", "Palo maría|Triplaris surinamensis", "Cuajo|Virola surinamensis",
+      "Aceituno, Guarataro negro|Vitex orinocensis", "Bosú|Zanthoxylum martinicense"
+    ]
+  };
+  var GRP = { 50: "especies duras (densidad de 0,75 g/cm³ o más)", 60: "especies semiduras (densidad de 0,56 a 0,74 g/cm³)", 70: "especies blandas (densidad de 0,55 g/cm³ o menos)" };
+  function norm(s) { return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
+  var E = [];
+  Object.keys(RAW).forEach(function (d) {
+    RAW[d].forEach(function (row) {
+      var p = row.split("|"), sci = norm(p[1]), w = sci.split(" ");
+      E.push({ dmc: +d, names: p[0].split(",").map(norm), sci: sci, genus: w[0], sp: w[1], genusOnly: /^(sp|spp)$/.test(w[1]), label: p[0].split(",")[0].trim() });
+    });
+  });
+  /* Samán: norma propia (Resolución N° 58 de 2014, art. 2 A): DAP mínimo de corta de 105 cm (330 cm de circunferencia). */
+  GRP[105] = "samán, según la Resolución N° 58 de 2014 (DAP de 105 cm o más, es decir 330 cm de CAP)";
+  [["Samán", ["saman"], "samanea saman"], ["Samán", ["saman"], "albizia saman"], ["Samán", ["saman"], "pithecellobium saman"]].forEach(function (x) {
+    var w = x[2].split(" ");
+    E.push({ dmc: 105, names: x[1], sci: x[2], genus: w[0], sp: w[1], genusOnly: false, label: x[0] });
+  });
+  var OV = { "Dura (50 cm)": 50, "Semidura (60 cm)": 60, "Blanda (70 cm)": 70 };
+  /* Busca la especie: primero por nombre científico, luego por nombre común. */
+  function info(nombre, cient, grupo) {
+    var n = norm(nombre), c = norm(cient), found = [], by = "";
+    if (c) {
+      var w = c.split(" "), g = w[0], s = w[1];
+      found = E.filter(function (e) { return !e.genusOnly && s && e.genus === g && e.sp === s; });
+      if (!found.length) found = E.filter(function (e) { return e.genusOnly && e.genus === g; });
+      if (found.length) by = "científico";
+    }
+    if (!found.length && n) { found = E.filter(function (e) { return e.names.indexOf(n) >= 0; }); if (found.length) by = "común"; }
+    var ds = []; found.forEach(function (e) { if (ds.indexOf(e.dmc) < 0) ds.push(e.dmc); }); ds.sort();
+    var ov = OV[grupo] || null;
+    if (ds.length) return { dmc: Math.max.apply(null, ds), ds: ds, conflict: ds.length > 1, src: "lista", by: by, sp: found[0].label };
+    if (ov) return { dmc: ov, ds: [ov], conflict: false, src: "manual" };
+    return { dmc: null, ds: [], conflict: false, src: "" };
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function nf(x) { return (Math.round(x * 10) / 10).toFixed(1).replace(".", ","); }
+  /* Resultado: ok = true (cumple), false (no cumple) o null (no se puede verificar) */
+  function check(i, dap) {
+    var r = { ok: null, text: "" }, hasD = dap > 0;
+    if (i.dmc == null) { r.text = "No figura en la lista de la norma. Elige el grupo de densidad para verificar el diámetro mínimo."; return r; }
+    var base = "DMC " + i.dmc + " cm · " + (i.src === "manual" ? "grupo elegido por ti: " : "") + GRP[i.dmc] + ".";
+    if (i.conflict) base = "El nombre figura en dos grupos (" + i.ds.join(" y ") + " cm). Se usa " + i.dmc + " cm por precaución. Escribe el nombre científico para precisar.";
+    if (!hasD) { r.text = base + " Falta el CAP para verificar."; return r; }
+    r.ok = dap >= i.dmc;
+    r.text = base + " DAP " + nf(dap) + " cm: " + (r.ok ? "CUMPLE." : "NO CUMPLE (le faltan " + nf(i.dmc - dap) + " cm).");
+    return r;
+  }
+  function html(i, dap) {
+    var r = check(i, dap);
+    return '<span style="' + (r.ok === false ? "color:var(--warn,#a55a00);font-weight:600" : (r.ok ? "font-weight:600" : "")) + '">' + esc(r.text) + "</span>";
+  }
+  A.dmc = { info: info, check: check, html: html, GROUPS: Object.keys(OV), count: E.length };
+  if (typeof module !== "undefined") module.exports = A.dmc;
+})();
+
+/* ---------- Especies en veda o con protección especial (normativa forestal venezolana) ---------- */
+(function () {
+  var A = window.APP = window.APP || {};
+  var R217 = "Resolución N° 217 (Gaceta Oficial N° 38.443 del 24-05-2006)";
+  var R142 = "Resolución N° 142 (Gaceta Oficial N° 34.867 del 20-12-1991), con antecedente en la Resolución N° 19 (Gaceta Oficial N° 33.924 del 11-03-1988)";
+  var R107 = "Resolución N° 107 (Gaceta Oficial N° 34.277 del 07-08-1989)";
+  /* nivel "veda": tala y aprovechamiento prohibidos. nivel "prot": protección o régimen especial. */
+  var L = [
+    { n: "Caoba", nivel: "veda", names: ["caoba"], sci: ["swietenia macrophylla"], norma: R217 },
+    { n: "Cedro", nivel: "veda", names: ["cedro", "cedro amargo"], sci: ["cedrela odorata"], norma: R217 },
+    { n: "Mijao", nivel: "veda", names: ["mijao"], sci: ["anacardium excelsum"], norma: R217 },
+    { n: "Pardillo negro", nivel: "veda", names: ["pardillo negro"], sci: ["cordia thaisiana", "cordia thaliana"], norma: R217 },
+    { n: "Acapro", nivel: "veda", names: ["acapro", "acaparo"], sci: ["tabebuia spectabilis"], norma: R217 },
+    { n: "Saquisaqui", nivel: "veda", names: ["saqui saqui", "saquisaqui"], sci: ["bombacopsis quinata", "pachira quinata"], norma: R217 },
+    { n: "Drago", nivel: "veda", names: ["drago"], sci: ["pterocarpus officinalis"], norma: R142 },
+    { n: "Jobo", nivel: "veda", names: ["jobo"], sci: ["spondias mombin"], norma: R142 },
+    { n: "Pino laso", nivel: "veda", names: ["pino laso", "pino criollo"], sci: ["retrophyllum rospigliosii", "decussocarpus rospigliosii", "podocarpus oleifolius"], genus: ["retrophyllum", "decussocarpus", "podocarpus", "prumnopitys"], norma: R107 + ", que abarca la familia Podocarpaceae" },
+    { n: "Samán", nivel: "prot", names: ["saman"], sci: ["samanea saman", "pithecellobium saman", "albizia saman"], norma: "Resolución N° 58 (Gaceta Oficial N° 40.474 del 13-08-2014), que regula el uso, la afectación y el aprovechamiento del samán" },
+    { n: "Mangle", nivel: "prot", names: ["mangle", "mangle rojo", "mangle negro", "mangle blanco", "mangle colorado", "mangle botoncillo"], genus: ["rhizophora", "avicennia", "laguncularia", "conocarpus"], norma: "Decreto N° 1.843 (Gaceta Oficial N° 34.819 del 14-10-1991), que protege los manglares y sus espacios vitales" },
+    { n: "Moriche", nivel: "prot", names: ["moriche", "palma de moriche"], sci: ["mauritia flexuosa"], norma: "Decreto N° 846 (Gaceta Oficial N° 34.462 del 08-05-1990), que protege los morichales" }
+  ];
+  function norm(s) { return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim(); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function find(nombre, cient) {
+    var n = norm(nombre), c = norm(cient), i, e;
+    for (i = 0; i < L.length; i++) {
+      e = L[i];
+      if ((n && e.names.indexOf(n) >= 0) || (c && e.sci && e.sci.indexOf(c) >= 0) || (c && e.genus && e.genus.indexOf(c.split(" ")[0]) >= 0)) return { nivel: e.nivel, n: e.n, norma: e.norma };
+    }
+    if (n === "pardillo") return { nivel: "dudoso", n: "Pardillo", norma: R217 };
+    return null;
+  }
+  function plain(f) {
+    if (!f) return "";
+    if (f.nivel === "veda") return "EN VEDA: " + f.n + ". Prohibida su tala y aprovechamiento (" + f.norma + ").";
+    if (f.nivel === "prot") return "PROTECCIÓN ESPECIAL: " + f.n + " (" + f.norma + ").";
+    return "VERIFICAR: si es Pardillo negro (Cordia thaisiana) está en veda (" + f.norma + ").";
+  }
+  function html(f) {
+    if (!f) return "";
+    var t, b;
+    if (f.nivel === "veda") { t = "ÁRBOL EN VEDA"; b = "Este árbol (" + f.n + ") está vedado. Su tala y aprovechamiento están prohibidos por la " + f.norma + ", y su incumplimiento es sancionado por el Estado venezolano. Cualquier intervención requiere pronunciamiento expreso del Ministerio."; }
+    else if (f.nivel === "prot") { t = "ÁRBOL BAJO PROTECCIÓN ESPECIAL"; b = f.n + " tiene protección o régimen especial: " + f.norma + ". Intervenirlo sin la autorización correspondiente es sancionado por la normativa venezolana."; }
+    else { t = "VERIFICA LA ESPECIE"; b = "Si se trata del Pardillo negro (Cordia thaisiana), está en veda por la " + f.norma + ". El Pardillo blanco (Cordia alliodora) no lo está."; }
+    return '<div class="vedabox ' + f.nivel + '" role="alert"><b>⚠ ' + t + "</b><span>" + esc(b) + "</span></div>";
+  }
+  var st = document.createElement("style");
+  st.textContent = ".vedabox{margin:10px 0;padding:10px 12px;border-radius:8px;border-left:6px solid #b3261e;background:rgba(179,38,30,.12);color:inherit;font-size:14px;line-height:1.4}" +
+    ".vedabox b{display:block;margin-bottom:3px;color:#b3261e;letter-spacing:.02em}.vedabox.prot,.vedabox.dudoso{border-left-color:#a55a00;background:rgba(165,90,0,.12)}.vedabox.prot b,.vedabox.dudoso b{color:#a55a00}" +
+    "@media (prefers-color-scheme: dark){:root:not([data-theme=\"light\"]) .vedabox b{color:#ff8a80}:root:not([data-theme=\"light\"]) .vedabox.prot b,:root:not([data-theme=\"light\"]) .vedabox.dudoso b{color:#ffb74d}}" +
+    ":root[data-theme=\"dark\"] .vedabox b{color:#ff8a80}:root[data-theme=\"dark\"] .vedabox.prot b,:root[data-theme=\"dark\"] .vedabox.dudoso b{color:#ffb74d}";
+  document.head.appendChild(st);
+  var seen = {};
+  /* Muestra el aviso en el elemento y lanza un mensaje emergente la primera vez que aparece */
+  function show(el, key, nombre, cient) {
+    var f = find(nombre, cient);
+    if (el) el.innerHTML = html(f);
+    var sig = f ? f.nivel + f.n : "";
+    if (f && f.nivel !== "dudoso" && seen[key] !== sig && A.toast) A.toast(f.nivel === "veda" ? "⚠ " + f.n + " está en VEDA: su tala está prohibida y sancionada" : "⚠ " + f.n + " tiene protección especial");
+    seen[key] = sig;
+    return f;
+  }
+  A.veda = { find: find, html: html, plain: plain, show: show, LIST: L };
+  if (typeof module !== "undefined") module.exports = A.veda;
+})();
+</script>
+<script>(function () {
   var A = window.APP || {};
   var KEY = "inspecciones-mp-v1", VKEY = "campo-vista";
   var $ = function (id) { return document.getElementById(id); };
@@ -1031,7 +1187,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     "personas": function () { return { nombre: "", cedula: "", cargo: "", tel: "" }; },
     "c.puntos": function () { return { desc: "", norte: "", este: "", alt: "" }; },
     "t.trozas": function () { return { nombre: "", cient: "", auto: "", d1: "", d2: "", L: "", ref: "" }; },
-    "t.filas": function () { return { cond: "", nombre: "", cient: "", auto: "", cap: "", dap: "", altura: "", vol: "", autoVol: "", ref: "" }; },
+    "t.filas": function () { return { grupo: "", cond: "", nombre: "", cient: "", auto: "", cap: "", dap: "", altura: "", vol: "", autoVol: "", ref: "" }; },
     "r.filas": function () { return { gps: "", tipo: "", vol: "", dist: "", foto: "" }; },
     "f": function () { return { hora: "", gps: "", orient: "", desc: "", img: "" }; },
     "e": function () { return { nombre: "", rel: "", decl: "" }; }
@@ -1041,7 +1197,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var pts = ["Acceso al fundo", "Vértice 1 del perímetro", "Vértice 2 del perímetro", "Vértice 3 del perímetro", "Vértice 4 del perímetro", "", "", ""];
     return {
       id: uid(), creado: new Date().toISOString(),
-      g: { oficio: "", causa: "", fiscal: "", investigado: "", delitos: "", lugar: "", fecha: today(), hini: "", hfin: "", clima: "", funcionarios: "", vehiculo: "" },
+      g: { dilSol: "", oficio: "", causa: "", fiscal: "", investigado: "", delitos: "", lugar: "", fecha: today(), hini: "", hfin: "", clima: "", funcionarios: "", vehiculo: "" },
       personas: [ADD.personas()],
       chkP: { propietario: false, oficio: false, nadie: false },
       c: { sistema: "UTM", datum: "WGS84", puntos: pts.map(function (d) { return { desc: d, norte: "", este: "", alt: "" }; }), linderos: "", superficie: "", uso: "", cartel: "", distancia: "" },
@@ -1181,8 +1337,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   /* ---------- planilla ---------- */
   function renderForm() {
     var i = cur(), sis = i.c.sistema, labN = sis === "UTM" ? "Norte (m)" : "Latitud", labE = sis === "UTM" ? "Este (m)" : "Longitud";
-    var s1 = F("g.oficio", "Oficio", { area: 1 }) + F("g.causa", "Causa penal") + F("g.fiscal", "Fiscal solicitante") + F("g.investigado", "Investigado(a)") +
-      F("g.delitos", "Delitos", { area: 1 }) + F("g.lugar", "Lugar", { area: 1 }) +
+    var s1 = '<button type="button" class="primary" data-oficio>Leer oficio con la cámara o una imagen</button><p class="hint">Toma una foto del oficio y la app llena estos datos. Los revisas antes de usarlos.</p>' + F("g.oficio", "Oficio", { area: 1 }) + F("g.causa", "Causa penal") + F("g.fiscal", "Fiscal solicitante") + F("g.investigado", "Investigado(a)") +
+      F("g.delitos", "Delitos", { area: 1 }) + F("g.lugar", "Lugar", { area: 1 }) + F("g.dilSol", "Diligencias solicitadas y plazo", { area: 1 }) +
       R2(F("g.fecha", "Fecha de inspección", { type: "date" }), F("g.clima", "Condiciones del clima")) +
       R2(F("g.hini", "Hora de inicio", { type: "time" }), F("g.hfin", "Hora de cierre", { type: "time" })) +
       F("g.funcionarios", "Funcionarios actuantes (nombre y cédula)", { area: 1 }) + F("g.vehiculo", "Vehículo / apoyo (GNB, Guardería Ambiental, otro)");
@@ -1206,13 +1362,13 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var s4 = '<p class="hint">Una fila por árbol, tocón o lote de madera. Si no hay evidencia de tala ni aprovechamiento, anótalo expresamente en Observaciones. El volumen se calcula con (CAP ÷ 3,1416 ÷ 100)² × altura × 0,605 y puedes corregirlo a mano.</p>' +
       i.t.filas.map(function (r, n) {
         var b = "t.filas." + n + ".";
-        return rowCard("N° " + (n + 1), "t.filas." + n, F(b + "cond", "Condición", { opts: ["", "Tocón", "Caído", "En pie", "Madera aserrada"] }) + F(b + "nombre", "Nombre común", { list: "especies" }) + F(b + "cient", "Nombre científico") +
-          R2(F(b + "cap", "CAP (cm)", { mode: "decimal" }), F(b + "altura", "Altura (m)", { mode: "decimal" })) + R2('<div class="field"><span class="lbl">DAP (cm)</span><div class="calc" id="dapv' + n + '" style="padding-top:14px"><b>' + (r.dap ? esc(r.dap) : "—") + "</b></div></div>", F(b + "vol", "Volumen aprox. (m³)", { mode: "decimal" })) + F(b + "ref", "Punto GPS / foto N°", { gps: 1 }));
+        return rowCard("N° " + (n + 1), "t.filas." + n, F(b + "cond", "Condición", { opts: ["", "Tocón", "Caído", "En pie", "Madera aserrada"] }) + F(b + "nombre", "Nombre común", { list: "especies" }) + F(b + "cient", "Nombre científico") + '<div id="vedaf' + n + '"></div>' +
+          R2(F(b + "cap", "CAP (cm)", { mode: "decimal" }), F(b + "altura", "Altura (m)", { mode: "decimal" })) + R2('<div class="field"><span class="lbl">DAP (cm)</span><div class="calc" id="dapv' + n + '" style="padding-top:14px"><b>' + (r.dap ? esc(r.dap) : "—") + "</b></div></div>", F(b + "vol", "Volumen aprox. (m³)", { mode: "decimal" })) + F(b + "grupo", "Grupo de densidad (solo si la especie no está en la norma)", { opts: ["", "Dura (50 cm)", "Semidura (60 cm)", "Blanda (70 cm)"] }) + '<div class="calc" id="dmcv' + n + '"></div>' + F(b + "ref", "Punto GPS / foto N°", { gps: 1 }));
       }).join("") + addBtn("t.filas", "Agregar árbol, tocón o lote") +
       '<div class="subhead">Rolas o trozas (fórmula de Smalian)</div><p class="hint">V = (A₁ + A₂) / 2 × L, con A = π/4 × d². Mide el diámetro de cada extremo en cm y la longitud en m. Anota en Observaciones si mediste con o sin corteza.</p>' +
       i.t.trozas.map(function (r, n) {
         var b = "t.trozas." + n + ".";
-        return rowCard("Troza N° " + (n + 1), "t.trozas." + n, F(b + "nombre", "Nombre común", { list: "especies" }) + F(b + "cient", "Nombre científico") +
+        return rowCard("Troza N° " + (n + 1), "t.trozas." + n, F(b + "nombre", "Nombre común", { list: "especies" }) + F(b + "cient", "Nombre científico") + '<div id="vedat' + n + '"></div>' +
           R2(F(b + "d1", "Diámetro extremo mayor (cm)", { mode: "decimal" }), F(b + "d2", "Diámetro extremo menor (cm)", { mode: "decimal" })) +
           R2(F(b + "L", "Longitud (m)", { mode: "decimal" }), '<div class="field"><span class="lbl">Volumen Smalian (m³)</span><div class="calc" id="smv' + n + '" style="padding-top:14px"><b>' + fmtV(smalian(r)) + "</b></div></div>") +
           F(b + "ref", "Punto GPS / foto N°", { gps: 1 }));
@@ -1279,7 +1435,14 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function render() {
     $("countInsp").textContent = S.items.length + (S.items.length === 1 ? " inspección" : " inspecciones");
     view.innerHTML = cur() ? renderForm() : renderList();
-    if (cur()) { updateCalc(); hydrateImgs(); }
+    if (cur()) { updateCalc(); cur().t.filas.forEach(function (r, n) { updateDmc(n); }); cur().t.trozas.forEach(function (r, n) { updateVedaT(n); }); hydrateImgs(); }
+  }
+  function dapOf(r) { var cap = num(r.cap), dp = num(r.dap); return cap > 0 ? cap / 3.1416 : (dp > 0 ? dp : NaN); }
+  function updateVedaT(n) { var r = cur().t.trozas[n]; if (r && A.veda) A.veda.show($("vedat" + n), "t" + n, r.nombre, r.cient); }
+  function updateDmc(n) {
+    var r = cur().t.filas[n]; if (r && A.veda) A.veda.show($("vedaf" + n), "f" + n, r.nombre, r.cient);
+    var el = $("dmcv" + n); if (!r || !el || !A.dmc) return;
+    el.innerHTML = A.dmc.html(A.dmc.info(r.nombre, r.cient, r.grupo), dapOf(r));
   }
 
   /* ---------- cálculos de tala ---------- */
@@ -1358,6 +1521,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     i.t.filas.forEach(function (r, n) {
       var m = []; if (!r.cond) m.push("condición"); if (!r.nombre) m.push("nombre común"); if (!(num(r.cap) > 0) && !(num(r.dap) > 0)) m.push("CAP"); if (!r.altura) m.push("altura");
       if (m.length) out.push("Tala N° " + (n + 1) + ": falta " + m.join(", "));
+      var vf = A.veda ? A.veda.find(r.nombre, r.cient) : null; if (vf && vf.nivel === "veda") out.push("AVISO, Tala N° " + (n + 1) + ": " + vf.n + " está en veda");
+      if (A.dmc) { var dc = A.dmc.check(A.dmc.info(r.nombre, r.cient, r.grupo), dapOf(r)); if (dc.ok === false) out.push("Tala N° " + (n + 1) + ": el DAP no alcanza el diámetro mínimo de cortabilidad de la norma"); }
     });
     if (!i.t.filas.length && !i.t.trozas.length && !i.t.obs.trim()) out.push("Tala: no hay filas; anota en Observaciones si no hay evidencia de tala");
     i.t.trozas.forEach(function (r, n) {
@@ -1388,18 +1553,20 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     function kv(a) { return [["Campo", "Registro"]].concat(a); }
     function sheet(name, aoa, w) { var ws = XLSX.utils.aoa_to_sheet(aoa); ws["!cols"] = w.map(function (x) { return { wch: x }; }); XLSX.utils.book_append_sheet(wb, ws, name); }
 
-    sheet("1 Datos generales", kv([["Oficio", g.oficio], ["Causa penal", g.causa], ["Fiscal solicitante", g.fiscal], ["Investigado(a)", g.investigado], ["Delitos", g.delitos], ["Lugar", g.lugar],
+    sheet("1 Datos generales", kv([["Oficio", g.oficio], ["Causa penal", g.causa], ["Fiscal solicitante", g.fiscal], ["Investigado(a)", g.investigado], ["Delitos", g.delitos], ["Lugar", g.lugar], ["Diligencias solicitadas y plazo", g.dilSol],
       ["Fecha de inspección", fechaFmt(g.fecha)], ["Hora de inicio", g.hini], ["Hora de cierre", g.hfin], ["Condiciones del clima", g.clima], ["Funcionarios actuantes (nombre y cédula)", g.funcionarios], ["Vehículo / apoyo", g.vehiculo]]), [40, 90]);
     sheet("2 Personas presentes", [["N°", "Nombre y apellido", "Cédula", "Cargo o relación con el fundo", "Teléfono"]].concat(i.personas.map(function (p, n) { return [n + 1, p.nombre, p.cedula, p.cargo, p.tel]; })).concat([[], ["Se identificó al propietario o encargado del fundo", yn(i.chkP.propietario)], ["Se leyó o mostró el oficio a quien atiende", yn(i.chkP.oficio)], ["No hubo persona alguna en el sitio", yn(i.chkP.nadie)]]), [48, 30, 16, 32, 16]);
     sheet("3 Coordenadas", [["Sistema usado", sis, "Datum", c.datum], [], ["Punto", "Descripción", labN, labE, "Altitud (m)"]]
       .concat(c.puntos.map(function (p, n) { return p.desc || p.norte || p.este || p.alt ? ["P" + (n + 1), p.desc, p.norte, p.este, p.alt] : null; }).filter(Boolean))
       .concat([[]]).concat(kv([["Linderos (norte, sur, este, oeste)", c.linderos], ["Superficie aproximada (ha)", c.superficie], ["Uso actual", c.uso], ["Cartel, cerca o identificación en el acceso", c.cartel], ["Distancia a vía, río, caño o cuerpo de agua", c.distancia]])), [44, 34, 16, 16, 12]);
-    sheet("4 Tala y aprovechamiento", [["N°", "Condición", "Nombre común", "Nombre científico", "CAP (cm)", "DAP (cm)", "Altura (m)", "Volumen aprox. (m3)", "Punto GPS / foto N°"]]
+    sheet("4 Tala y aprovechamiento", [["N°", "Condición", "Nombre común", "Nombre científico", "CAP (cm)", "DAP (cm)", "Altura (m)", "Volumen aprox. (m3)", "Punto GPS / foto N°", "DMC (cm)", "Cumple DMC", "Condición legal"]]
       .concat(i.t.filas.map(function (r, n) {
         var rw = n + 2, cap = num(r.cap), dp = num(r.dap), h = num(r.altura), vl = num(r.vol);
         var dapC = cap > 0 ? { t: "n", v: Number((cap / 3.1416).toFixed(1)), f: "E" + rw + "/3.1416" } : (dp > 0 ? dp : "");
         var volC = isFinite(vl) ? (cap > 0 && h > 0 && r.vol === r.autoVol ? { t: "n", v: vl, f: "(E" + rw + "/3.1416/100)^2*G" + rw + "*0.605" } : vl) : "";
-        return [n + 1, r.cond, r.nombre, r.cient, cap > 0 ? cap : "", dapC, h > 0 ? h : "", volC, r.ref];
+        var di = A.dmc ? A.dmc.info(r.nombre, r.cient, r.grupo) : { dmc: null }, dapN = dapOf(r), cum = "";
+        if (di.dmc && dapN > 0) cum = { t: "s", v: dapN >= di.dmc ? "Sí" : "No", f: 'IF(OR(F' + rw + '="",J' + rw + '=""),"",IF(F' + rw + '>=J' + rw + ',"Sí","No"))' };
+        return [n + 1, r.cond, r.nombre, r.cient, cap > 0 ? cap : "", dapC, h > 0 ? h : "", volC, r.ref, di.dmc || "", cum, A.veda ? A.veda.plain(A.veda.find(r.nombre, r.cient)) : ""];
       }))
       .concat([[]]).concat(kv([["Total de individuos talados o aprovechados", i.t.total], ["Especies identificadas", i.t.especies], ["Volumen total aproximado (m3)", i.t.vol], ["Antigüedad estimada de la tala", i.t.antig], ["Evidencias de aserrío, tronzado o traslado", i.t.evid], ["Observaciones", i.t.obs]])), [44, 16, 22, 26, 10, 10, 10, 18, 26]);
     if (i.t.trozas.length) {
@@ -1460,7 +1627,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var v = el.type === "checkbox" ? el.checked : el.value;
     setP(cur(), p, v); persist();
     if (p === "c.sistema") { render(); return; }
-    var m = /^t\.filas\.(\d+)\.(nombre|vol|cap|altura)$/.exec(p);
+    var m = /^t\.filas\.(\d+)\.(nombre|vol|cap|altura|cient|grupo)$/.exec(p);
     if (m) {
       if (m[2] === "nombre") {
         var row = cur().t.filas[+m[1]], s = A.sciFor ? A.sciFor(v) : "";
@@ -1473,9 +1640,9 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         var vv = volStand(rw), vs = vv == null ? "" : vv.toFixed(3);
         if (!rw.vol || rw.vol === rw.autoVol) { rw.vol = vs; rw.autoVol = vs; var ve2 = $(fid("t.filas." + m[1] + ".vol")); if (ve2) ve2.value = vs; }
       }
-      updateCalc();
+      updateDmc(+m[1]); updateCalc();
     }
-    var m2 = /^t\.trozas\.(\d+)\.(nombre|d1|d2|L)$/.exec(p);
+    var m2 = /^t\.trozas\.(\d+)\.(nombre|cient|d1|d2|L)$/.exec(p);
     if (m2) {
       var tr = cur().t.trozas[+m2[1]];
       if (m2[2] === "nombre") {
@@ -1483,7 +1650,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
         if (!tr.cient || tr.cient === tr.auto) { tr.cient = s2; tr.auto = s2; var ce2 = $(fid("t.trozas." + m2[1] + ".cient")); if (ce2) ce2.value = s2; }
       }
       var ve = $("smv" + m2[1]); if (ve) ve.innerHTML = "<b>" + fmtV(smalian(tr)) + "</b>";
-      updateCalc();
+      updateVedaT(+m2[1]); updateCalc();
     }
   }
   view.addEventListener("input", onInput);
@@ -1528,6 +1695,17 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       photoPath = "f." + (cur().f.length - 1); camIn.click(); return;
     }
     if (b.hasAttribute("data-exportfotos")) { exportFotos(); return; }
+    if (b.hasAttribute("data-oficio")) {
+      if (!A.oficio) { toast("El lector de oficios no está disponible aquí."); return; }
+      A.oficio.open({ apply: function (v) {
+        var g = cur().g, f = A.oficio.fmt;
+        if (v.oficio) g.oficio = "N° " + v.oficio.replace(/^N\S{0,3}\s*/i, "") + (v.fechaOf ? ", del " + f(v.fechaOf) : "") + (v.recibido ? " (recibido el " + f(v.recibido) + ")" : "");
+        if (v.causa) g.causa = v.causa + (v.fiscalia ? ", " + v.fiscalia : "");
+        if (v.fiscal) g.fiscal = v.fiscal; if (v.investigado) g.investigado = v.investigado; if (v.delitos) g.delitos = v.delitos; if (v.lugar) g.lugar = v.lugar; if (v.diligencias) g.dilSol = v.diligencias;
+        open[1] = true; persist(true); render(); toast("Datos del oficio aplicados");
+      } });
+      return;
+    }
     if (b.hasAttribute("data-review")) { review(); return; }
     if (b.hasAttribute("data-export")) { exportXlsx(); return; }
   });
@@ -1590,7 +1768,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
   var ADD = {
     "puntos": function () { return { v: "", este: "", norte: "", obs: "" }; },
-    "arboles": function () { return { especie: "", cient: "", auto: "", metodo: M_PIE, cap: "", altura: "", vol: "", norte: "", este: "", obs: "", trozas: [] }; },
+    "arboles": function () { return { grupo: "", especie: "", cient: "", auto: "", metodo: M_PIE, cap: "", altura: "", vol: "", norte: "", este: "", obs: "", trozas: [] }; },
     "arboles.trozas": function () { return { d1: "", d2: "", L: "" }; },
     "aprovArb": function () { return ADD.arboles(); }, "aprovArb.trozas": function () { return ADD["arboles.trozas"](); },
     "salv": function () { return ADD.arboles(); }, "salv.trozas": function () { return ADD["arboles.trozas"](); },
@@ -1768,7 +1946,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   var LISTS = ["arboles", "aprovArb", "salv"];
   var LNAME = { arboles: "Árboles en riesgo", aprovArb: "Árboles de aprovechamiento", salv: "Árboles de salvamento" };
   function arbolCard(a, n, key) {
-    var b = key + "." + n + ".", inner = F(b + "especie", "Especie (nombre común)", { list: "especies" }) + F(b + "cient", "Nombre científico") +
+    var b = key + "." + n + ".", inner = F(b + "especie", "Especie (nombre común)", { list: "especies" }) + F(b + "cient", "Nombre científico") + '<div id="veda' + key + n + '"></div>' +
       F(b + "metodo", "Método de cálculo del volumen", { opts: [M_PIE, M_SM, M_MAN] });
     if (a.metodo === M_PIE) inner += R2(F(b + "cap", "CAP (cm)", { mode: "decimal" }), F(b + "altura", "Altura comercial (m)", { mode: "decimal" }));
     else if (a.metodo === M_SM) {
@@ -1779,7 +1957,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
             R2(F(c + "L", "Longitud (m)", { mode: "decimal" }), '<div class="field"><span class="lbl">Volumen (m³)</span><div class="calc" id="trv' + key + n + "_" + m + '" style="padding-top:14px"><b>' + fmtV(smalian(t)) + "</b></div></div>"));
         }).join("") + addBtn(key + "." + n + ".trozas", "Agregar troza") + F(b + "altura", "Altura comercial (m)", { mode: "decimal" });
     } else inner += R2(F(b + "vol", "Volumen (m³)", { mode: "decimal" }), F(b + "altura", "Altura comercial (m)", { mode: "decimal" })) + F(b + "cap", "CAP (cm), si se conoce", { mode: "decimal" });
-    inner += '<div class="calc" id="arv' + key + n + '"></div>' +
+    inner += '<div class="calc" id="arv' + key + n + '"></div>' + F(b + "grupo", "Grupo de densidad (solo si la especie no está en la norma)", { opts: ["", "Dura (50 cm)", "Semidura (60 cm)", "Blanda (70 cm)"] }) + '<div class="calc" id="dmc' + key + n + '"></div>' +
       R2(F(b + "norte", cur().cs.sistema === "UTM" ? "Norte (m)" : "Latitud", { mode: "decimal" }), F(b + "este", cur().cs.sistema === "UTM" ? "Este (m)" : "Longitud", { mode: "decimal" })) +
       '<button type="button" data-gpspt="' + key + "." + n + '">Tomar GPS del árbol</button>' + F(b + "obs", "Observación", { area: 1 });
     return rowCard("Árbol N° " + (n + 1), key + "." + n, inner);
@@ -1799,12 +1977,19 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       txt.push("Volumen " + (v == null ? "—" : v.toFixed(3) + " m³")); el.textContent = txt.join(" · ");
     }
     (a.trozas || []).forEach(function (t, m) { var te = $("trv" + key + n + "_" + m); if (te) te.innerHTML = "<b>" + fmtV(smalian(t)) + "</b>"; });
+    var de = $("dmc" + key + n);
+    if (de && A.dmc) de.innerHTML = A.dmc.html(A.dmc.info(a.especie, a.cient, a.grupo), dapOf(a));
+    if (A.veda) A.veda.show($("veda" + key + n), key + n, a.especie, a.cient);
   }
+  function dapOf(a) { var cap = num(a.cap); return cap > 0 ? cap / 3.1416 : NaN; }
+  function dmcRes(a) { return A.dmc ? A.dmc.check(A.dmc.info(a.especie, a.cient, a.grupo), dapOf(a)) : { ok: null }; }
   function updateTotal(key) {
     var i = cur(); if (!i) return;
     var el = $("tot_" + key); if (!el) return;
     var t = 0; i[key].forEach(function (a) { var v = arbolVol(a); if (v != null) t += v; });
-    el.textContent = "Volumen total: " + t.toFixed(3) + " m³ en " + i[key].length + (i[key].length === 1 ? " árbol" : " árboles");
+    var extra = "";
+    if (i[key].length) { var ok = 0, ver = 0; i[key].forEach(function (a) { var r = dmcRes(a); if (r.ok !== null) { ver++; if (r.ok) ok++; } }); if (ver) extra = " · Cumplen el diámetro mínimo: " + ok + " de " + ver + " verificados"; }
+    el.textContent = "Volumen total: " + t.toFixed(3) + " m³ en " + i[key].length + (i[key].length === 1 ? " árbol" : " árboles") + extra;
   }
 
   /* ---------- lista y planilla ---------- */
@@ -1841,11 +2026,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       sub("Tipo de bosque") + F("sitio.bnat", "Bosque natural", { area: 1 }) + F("sitio.bplant", "Bosque plantado (superficie, edad, código de registro)", { area: 1 });
     var s4 = arbolBlock("arboles", "Una fila por árbol. Elige cómo calcular el volumen: en pie con tu fórmula, por trozas con Smalian, o manual.") +
       F("riesgo.noVedada", "Especies no vedadas en riesgo", { area: 1 }) + F("riesgo.obs", "Observaciones generales", { area: 1 });
-    var s5 = sub("Bosque natural") + F("aprov.semilleros", "Árboles semilleros", { area: 1 }) + F("aprov.reserva", "Área de reserva de medio silvestre", { area: 1 }) +
-      sub("Bosque plantado") + R2(F("aprov.pcod", "Código de registro"), F("aprov.pesp", "Especies")) + R2(F("aprov.pmod", "Modalidad de plantación"), F("aprov.pfecha", "Fecha de plantación")) +
-      R2(F("aprov.pedad", "Edad"), F("aprov.psup", "Superficie")) + R2(F("aprov.pdist", "Distancia entre árboles"), F("aprov.palt", "Altura promedio")) + F("aprov.pdiam", "Diámetro promedio") +
-      sub("General") + F("aprov.cumplen", "Árboles chequeados que cumplen diámetros mínimos", { area: 1 }) + F("aprov.corta", "Corta total / raleo") + F("aprov.vivero", "Vivero activo") + F("aprov.repob", "Repoblación", { area: 1 }) +
-      sub("Árboles de aprovechamiento") + arbolBlock("aprovArb", "Mismo procedimiento que en árboles en riesgo: volumen en pie, Smalian o manual, con coordenadas.");
+    var s5 = arbolBlock("aprovArb", "Árboles de aprovechamiento. Mismo procedimiento: volumen en pie, Smalian o manual, con coordenadas.");
     var s6 = arbolBlock("salv", "Árboles de salvamento. Mismo procedimiento: volumen en pie, Smalian o manual, con coordenadas.");
     var s10 = '<p class="hint">Cada foto lleva fecha, hora y coordenadas. El pie de foto es la descripción.</p><button type="button" class="primary" data-newphoto>Tomar foto nueva</button>' +
       i.fotos.map(function (f, n) {
@@ -1881,6 +2062,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (!i.arboles.length) out.push("Árboles en riesgo: no hay ningún árbol registrado");
     LISTS.forEach(function (k) {
       i[k].forEach(function (a, n) {
+        var vf = A.veda ? A.veda.find(a.especie, a.cient) : null; if (vf && vf.nivel === "veda") out.push("AVISO, " + LNAME[k] + ", árbol N° " + (n + 1) + ": " + vf.n + " está en veda");
+        if (dmcRes(a).ok === false) out.push(LNAME[k] + ", árbol N° " + (n + 1) + ": el DAP no alcanza el diámetro mínimo de cortabilidad de la norma");
         var m = []; if (!a.especie.trim()) m.push("especie"); if (arbolVol(a) == null) m.push("volumen"); if (!a.norte || !a.este) m.push("coordenadas"); if (!(num(a.altura) > 0)) m.push("altura comercial");
         if (a.metodo !== M_SM && !(num(a.cap) > 0)) m.push("CAP / DAP");
         if (m.length) out.push(LNAME[k] + ", árbol N° " + (n + 1) + ": falta " + m.join(", "));
@@ -1915,12 +2098,15 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var SN = { arboles: ["3 Árboles en riesgo", "3b Trozas riesgo"], aprovArb: ["4b Árboles aprovechamiento", "4c Trozas aprovechamiento"], salv: ["5 Salvamento", "5b Trozas salvamento"] };
     function treeSheets(key) {
       var list = i[key], hdr = ["N°", "Especie", "Nombre científico", "Método de cálculo", "CAP (cm)", "DAP (cm)", "Altura comercial (m)", "Volumen (m3)", labN, labE, "Observación"], rows = [hdr], tot = 0;
+      hdr.push("DMC (cm)", "Cumple DMC", "Condición legal");
       list.forEach(function (a, n) {
         var r = n + 2, cap = num(a.cap), h = num(a.altura), v = arbolVol(a);
         if (v != null) tot += v;
         var dap = cap > 0 ? { t: "n", v: Number((cap / 3.1416).toFixed(1)), f: "E" + r + "/3.1416" } : "";
         var vol = v == null ? "" : (a.metodo === M_PIE && cap > 0 && h > 0 ? { t: "n", v: Number(v.toFixed(4)), f: "(E" + r + "/3.1416/100)^2*G" + r + "*0.605" } : Number(v.toFixed(4)));
-        rows.push([n + 1, a.especie, a.cient, a.metodo, cap > 0 ? cap : "", dap, h > 0 ? h : "", vol, q(a.norte), q(a.este), a.obs]);
+        var fila = [n + 1, a.especie, a.cient, a.metodo, cap > 0 ? cap : "", dap, h > 0 ? h : "", vol, q(a.norte), q(a.este), a.obs];
+      { var di = A.dmc ? A.dmc.info(a.especie, a.cient, a.grupo) : { dmc: null }, dd = dapOf(a); fila.push(di.dmc || "", di.dmc && dd > 0 ? { t: "s", v: dd >= di.dmc ? "Sí" : "No", f: 'IF(OR(F' + r + '="",L' + r + '=""),"",IF(F' + r + '>=L' + r + ',"Sí","No"))' } : ""); fila.push(A.veda ? A.veda.plain(A.veda.find(a.especie, a.cient)) : ""); }
+      rows.push(fila);
       });
       if (list.length) { rows.push([]); rows.push(["", "", "", "", "", "", "TOTAL (m3)", { t: "n", v: Number(tot.toFixed(4)), f: "SUM(H2:H" + (1 + list.length) + ")" }]); }
       if (key === "arboles") rows = rows.concat([[], ["Especies no vedadas en riesgo", i.riesgo.noVedada], ["Observaciones generales", i.riesgo.obs]]);
@@ -1945,10 +2131,6 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     }
     function a_has(x) { return x.length > 0; }
     treeSheets("arboles");
-    var a4 = i.aprov;
-    sheet("4 Aprovechamiento", kv([["Árboles semilleros", a4.semilleros], ["Área de reserva de medio silvestre", a4.reserva], ["Plantado: código de registro", a4.pcod], ["Plantado: especies", a4.pesp], ["Plantado: modalidad", a4.pmod], ["Plantado: fecha", a4.pfecha],
-      ["Plantado: edad", a4.pedad], ["Plantado: superficie", a4.psup], ["Plantado: distancia entre árboles", a4.pdist], ["Plantado: altura promedio", a4.palt], ["Plantado: diámetro promedio", a4.pdiam],
-      ["Árboles chequeados que cumplen diámetros mínimos", a4.cumplen], ["Corta total / raleo", a4.corta], ["Vivero activo", a4.vivero], ["Repoblación", a4.repob]]), [48, 100]);
     treeSheets("aprovArb"); treeSheets("salv");
     sheet("Reseña fotográfica", [["Fotografía N°", "Fecha", "Hora", "Coordenadas de la toma", "Pie de foto", "Foto adjunta"]].concat(i.fotos.map(function (f, n) { return [n + 1, fechaFmt(f.fecha), f.hora, f.gps, f.desc, f.img ? "Sí" : "No"]; })), [14, 12, 8, 30, 60, 12]);
 
@@ -2055,7 +2237,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   var TIPOS = ["Tablas", "Tablones", "Estantillos", "Listones", "Cuartones", "Bigueta", "Rolas", "Trozas", "Postes", "Vigas"];
 
   function blank() {
-    return { id: uid(), fecha: today(), titulo: "Experticia método volumen m³", expN: "", fiscalia: "", lugar: "", tecnico: "", obs: "", filas: [] };
+    return { id: uid(), fecha: today(), titulo: "Experticia método volumen m³", oficio: "", expN: "", fiscalia: "", lugar: "", tecnico: "", obs: "", filas: [] };
   }
   function load() {
     try { var r = localStorage.getItem(KEY); if (r) { var s = JSON.parse(r); if (s && Array.isArray(s.items)) { s.cur = null; return s; } } } catch (e) {}
@@ -2088,7 +2270,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   }
   function renderForm() {
     var i = cur();
-    var head = F("titulo", "Título de la experticia") + R2(F("fecha", "Fecha", { type: "date" }), F("expN", "Expediente N°")) + F("fiscalia", "Fiscalía / ente solicitante") + F("lugar", "Lugar de la experticia") + F("tecnico", "Técnico");
+    var head = '<button type="button" class="primary" data-oficio>Leer oficio con la cámara o una imagen</button><p class="hint">Toma una foto del oficio y la app llena los datos de abajo. Los revisas antes de usarlos.</p>' + F("titulo", "Título de la experticia") + F("oficio", "Oficio", { area: 1 }) + R2(F("fecha", "Fecha", { type: "date" }), F("expN", "Expediente N°")) + F("fiscalia", "Fiscalía / ente solicitante") + F("lugar", "Lugar de la experticia") + F("tecnico", "Técnico");
     var rows = i.filas.map(function (r, n) {
       var b = "filas." + n + ".";
       return '<div class="rowc"><div class="rowc-h"><span class="rn">Pieza ' + (n + 1) + '</span><button type="button" class="quiet" data-dup="' + n + '">Repetir</button><button type="button" class="quiet danger" data-del="' + n + '">Quitar</button></div>' +
@@ -2144,7 +2326,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     });
     res.push(["Total", { t: "n", v: i.filas.length, f: "SUM(B2:B" + (1 + byTipo(i).length) + ")" }, { t: "n", v: Number(total(i).toFixed(6)), f: "SUM(C2:C" + (1 + byTipo(i).length) + ")" }]);
     var w2 = XLSX.utils.aoa_to_sheet(res); w2["!cols"] = [22, 10, 14].map(function (w) { return { wch: w }; }); XLSX.utils.book_append_sheet(wb, w2, "Resumen por tipo");
-    var d = [["Campo", "Registro"], ["Título", i.titulo], ["Fecha", fechaFmt(i.fecha)], ["Expediente N°", i.expN], ["Fiscalía / ente solicitante", i.fiscalia], ["Lugar", i.lugar], ["Técnico", i.tecnico], ["Observaciones", i.obs]];
+    var d = [["Campo", "Registro"], ["Título", i.titulo], ["Fecha", fechaFmt(i.fecha)], ["Oficio", i.oficio], ["Expediente N° / causa", i.expN], ["Fiscalía / ente solicitante", i.fiscalia], ["Lugar", i.lugar], ["Técnico", i.tecnico], ["Observaciones", i.obs]];
     var w3 = XLSX.utils.aoa_to_sheet(d); w3["!cols"] = [{ wch: 28 }, { wch: 70 }]; XLSX.utils.book_append_sheet(wb, w3, "Datos");
     var out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     if (A.deliver) A.deliver("experticia_" + slug(i.expN || i.titulo) + "_" + (i.fecha || today()) + ".xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -2168,9 +2350,218 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if (b.hasAttribute("data-add")) { var f = cur().filas; f.push(nextRow(f[f.length - 1] ? { lote: f[f.length - 1].lote, unidad: f[f.length - 1].unidad, L: "", A: "", E: "", tipo: f[f.length - 1].tipo } : null)); persist(true); render(); var cs = view.querySelectorAll(".rowc"); if (cs.length) cs[cs.length - 1].scrollIntoView({ block: "center" }); return; }
     if ((a = b.getAttribute("data-dup"))) { var fl = cur().filas, src = fl[+a]; var cp = nextRow(src); cp.L = src.L; cp.A = src.A; cp.E = src.E; fl.splice(+a + 1, 0, cp); persist(true); render(); return; }
     if ((a = b.getAttribute("data-del"))) { twoTap(b, function () { cur().filas.splice(+a, 1); persist(true); render(); }); return; }
+    if (b.hasAttribute("data-oficio")) {
+      if (!A.oficio) { toast("El lector de oficios no está disponible aquí."); return; }
+      A.oficio.open({ apply: function (v) {
+        var i = cur(), f = A.oficio.fmt;
+        if (v.oficio) i.oficio = "N° " + v.oficio.replace(/^N\S{0,3}\s*/i, "") + (v.fechaOf ? ", del " + f(v.fechaOf) : "") + (v.recibido ? " (recibido el " + f(v.recibido) + ")" : "");
+        if (v.causa) i.expN = v.causa;
+        if (v.fiscalia || v.fiscal) i.fiscalia = [v.fiscalia, v.fiscal].filter(Boolean).join(", ");
+        if (v.lugar) i.lugar = v.lugar;
+        var extra = [v.investigado ? "Investigado(a): " + v.investigado : "", v.delitos ? "Delitos: " + v.delitos : "", v.diligencias ? "Diligencias solicitadas: " + v.diligencias : ""].filter(Boolean).join("\n");
+        if (extra) i.obs = extra;
+        persist(true); render(); toast("Datos del oficio aplicados");
+      } });
+      return;
+    }
     if (b.hasAttribute("data-export")) { exportXlsx(); return; }
   });
   render();
+})();
+</script>
+<script>(function () {
+  var A = window.APP = window.APP || {};
+  var LOCAL = /*OCR_LOCAL*/true;
+  var CDN = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+  var MESES = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12 };
+  function p2(n) { return (n < 10 ? "0" : "") + n; }
+  function iso(d, m, y) { y = +y; if (y < 100) y += 2000; return y + "-" + p2(+m) + "-" + p2(+d); }
+  function fmt(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? m[3] + "-" + m[2] + "-" + m[1] : (s || ""); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function isCaps(s) { if (!s) return false; var up = (s.match(/[A-ZÁÉÍÓÚÑ]/g) || []).length, lo = (s.match(/[a-záéíóúñ]/g) || []).length; return up >= 4 && up >= 0.6 * (up + lo); }
+  var SMALL = { de: 1, del: 1, la: 1, el: 1, en: 1, y: 1, o: 1, al: 1, los: 1, las: 1, por: 1, a: 1 };
+  function title(s) {
+    if (!isCaps(s)) return s;
+    return s.toLowerCase().replace(/[a-záéíóúñ0-9"]+/g, function (w, i) { return i > 0 && SMALL[w] ? w : w.replace(/^("?)([a-záéíóúñ])/, function (_, q, c) { return q + c.toUpperCase(); }); });
+  }
+  function sentence(s) { if (!isCaps(s)) return s; var l = s.toLowerCase(); return l.charAt(0).toUpperCase() + l.slice(1); }
+  function clean(s) { return String(s || "").replace(/\s+/g, " ").replace(/^[\s,.:;"'`-]+|[\s,;]+$/g, "").trim(); }
+
+  /* Extrae los datos de un oficio a partir del texto leído */
+  function parse(text) {
+    var out = {}, warn = {};
+    var lines = String(text || "").split(/\n/).map(function (l) { return l.replace(/[ \t]+/g, " ").trim(); });
+    var flat = lines.join(" ").replace(/\s+/g, " ");
+    var m;
+    m = /(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+del?\s+(\d{4})/i.exec(flat);
+    if (m) out.fechaOf = iso(m[1], MESES[m[2].toLowerCase()], m[3]);
+    m = /(\d{2}-[A-Z]\d{1,2})\s*-([^A-Za-z]{0,24}?)\s*-?\s*(20\d{2})/.exec(flat);
+    if (m) {
+      var mid = (/\b(\d{4})\b/.exec(m[2]) || [])[1];
+      out.oficio = m[1] + "-" + (mid || "____") + "-" + m[3];
+      warn.oficio = mid ? "El número se escribe a mano y suele leerse mal. Compáralo con el papel." : "El número escrito a mano no se pudo leer. Escríbelo en el espacio en blanco.";
+    }
+    m = /Causa\s*(?:Penal\s*)?(?:Ambiental\s*)?N\S{0,3}\.?\s*(MP-\d{3,6}-\d{4})/i.exec(flat) || /\b(MP-\d{3,6}-\d{4})\b/.exec(flat);
+    if (m) out.causa = m[1];
+    m = /FISCAL[IÍ]A\s+([A-ZÁÉÍÓÚa-záéíóúñ]+)\s+DEL\s+ESTADO\s+([A-Za-záéíóúñ]+)/i.exec(flat);
+    if (m) out.fiscalia = "Fiscalía " + title(m[1].toUpperCase()).replace(/ecima$/, "écima") + " del Estado " + title(m[2].toUpperCase());
+    for (var k = 0; k < lines.length; k++) {
+      var fm = /^[\W_]*FISCAL\s+(PROVISORIO|TITULAR|AUXILIAR|SUPERIOR|ESPECIALIZAD[OA])/i.exec(lines[k]);
+      if (fm) {
+        var nm = "";
+        for (var b = k - 1; b >= Math.max(0, k - 2) && !nm; b--) {
+          var toks = lines[b].split(/\s+/).map(function (t) { return t.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, ""); }).filter(function (t) { return t.length >= 3 && !/^abog/i.test(t); });
+          if (toks.length >= 2) nm = toks.join(" ");
+        }
+        out.fiscal = (nm ? "Abog. " + title(nm.toUpperCase()) + ", " : "") + "Fiscal " + sentence(fm[1].toUpperCase());
+        warn.fiscal = "El sello puede tapar el nombre. Revísalo.";
+        break;
+      }
+    }
+    m = /en\s+contra\s+d\w*\s+(?:los\s+)?ciudadan\w*\s*:?\s*(.+?)\s*,?\s*(?:titular|por\s+la\s+comisi)/i.exec(flat);
+    if (m) {
+      out.investigado = title(isCaps(clean(m[1])) ? clean(m[1]).toUpperCase() : clean(m[1]));
+      var c = /c[eé]dula\s*N\S{0,3}\s*(.+?)\s*,?\s*por\s+la\s+comisi/i.exec(flat);
+      if (c) out.investigado += ", cédula " + clean(c[1]).replace(/^V\s*\(/i, "V-(");
+      warn.investigado = "Revisa la ortografía del nombre.";
+    }
+    m = /delitos?\s*[:,]\s*(.+?)\s*,\s*se\s+sirva/i.exec(flat);
+    if (m) { var dl = clean(m[1]); out.delitos = sentence(isCaps(dl) ? dl.toUpperCase() : dl).replace(/\sY\s/g, " y "); }
+    m = /hechos\s*:\s*(.+?)\.\s*Las\s+cuales/i.exec(flat);
+    if (m) { out.lugar = title(clean(m[1])); warn.lugar = "Revisa la ortografía de los nombres de lugares."; }
+    m = /lapso\s+de\s+respuesta\s+de\s+\w+\s*\(?\s*(\d+)\s*\)?\s*d[ií]as/i.exec(flat);
+    var plazo = m ? "Plazo de respuesta: " + (+m[1]) + " días." : "";
+    m = /continuaci[oó]n\s*:?\s*(.+?)\s*Dicho\s+requerimiento/i.exec(flat);
+    var dil = "";
+    if (m) dil = m[1].split(/\s(?=\d{1,2}\.\s+[A-ZÁÉÍÓÚ])/).map(clean).filter(Boolean).join("\n");
+    if (dil || plazo) out.diligencias = (dil + (dil && plazo ? "\n" : "") + plazo).trim();
+    m = /Recibido\s*:?\s*[_\s]*(\d{1,2})\s*[-–]\s*(\d{1,2})\s*[-–]\s*(\d{2,4})/i.exec(flat);
+    if (m && +m[1] <= 31 && +m[2] <= 12) { out.recibido = iso(m[1], m[2], m[3]); warn.recibido = "Es manuscrito. Compáralo con el sello."; }
+    return { v: out, warn: warn };
+  }
+
+  /* ---------- carga del lector ---------- */
+  var libP = null;
+  function abs(p) { return new URL(p, location.href).href; }
+  function loadLib() {
+    if (window.Tesseract) return Promise.resolve();
+    if (libP) return libP;
+    libP = new Promise(function (ok, no) {
+      var s = document.createElement("script");
+      s.src = LOCAL ? "ocr-tesseract.min.js" : CDN; s.async = true;
+      s.onload = function () { window.Tesseract ? ok() : no(new Error("lib")); };
+      s.onerror = function () { libP = null; no(new Error("net")); };
+      document.head.appendChild(s);
+    });
+    return libP;
+  }
+  var ST = { "loading tesseract core": "Cargando el lector", "initializing tesseract": "Preparando el lector", "loading language traineddata": "Cargando el español", "initializing api": "Preparando el lector", "recognizing text": "Leyendo el texto" };
+  function makeWorker(onProg) {
+    var opts = { cacheMethod: "none", logger: function (m) { if (onProg) onProg(ST[m.status] || "Trabajando", m.status === "recognizing text" ? m.progress : null); } };
+    if (LOCAL) { var base = abs("./").replace(/\/$/, ""); opts.workerPath = base + "/ocr-worker.min.js"; opts.corePath = base; opts.langPath = base; }
+    return loadLib().then(function () { return window.Tesseract.createWorker("spa", 1, opts); });
+  }
+  function prepare(onProg) { return makeWorker(onProg).then(function (w) { return w.terminate(); }); }
+  function shrink(file, max) {
+    return new Promise(function (ok, no) {
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () {
+        var k = Math.min(1, max / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url); ok(c);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); no(new Error("img")); };
+      im.src = url;
+    });
+  }
+  function readImage(file, onProg) {
+    var W;
+    return shrink(file, 2400).then(function (cv) {
+      return makeWorker(onProg).then(function (w) { W = w; return w.recognize(cv); });
+    }).then(function (r) { var t = r.data.text, c = r.data.confidence; return W.terminate().then(function () { return { text: t, conf: c }; }); },
+      function (e) { if (W) { try { W.terminate(); } catch (x) {} } throw e; });
+  }
+
+  /* ---------- ventana ---------- */
+  var FIELDS = [
+    ["oficio", "Número de oficio", "text"], ["fechaOf", "Fecha del oficio", "date"], ["recibido", "Fecha en que se recibió", "date"],
+    ["causa", "Causa penal", "text"], ["fiscalia", "Fiscalía", "text"], ["fiscal", "Fiscal solicitante", "text"], ["investigado", "Investigado(a)", "text"],
+    ["delitos", "Delitos", "area"], ["lugar", "Lugar de los hechos", "area"], ["diligencias", "Diligencias solicitadas y plazo", "area"]
+  ];
+  var css = document.createElement("style");
+  css.textContent = ".ocrov{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}" +
+    ".ocrsh{background:var(--surface,#fff);color:var(--ink,#111);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px 16px 22px;box-sizing:border-box}" +
+    ".ocrsh h2{margin:0 0 6px}.ocrsh .btns{display:grid;gap:10px;margin:14px 0}.ocrsh .fine{opacity:.8;font-size:14px;line-height:1.45;margin:6px 0}" +
+    ".ocrbar{height:10px;border-radius:5px;background:rgba(127,127,127,.25);overflow:hidden;margin:12px 0}.ocrbar i{display:block;height:100%;width:0;background:var(--accent,#1d5a38);transition:width .2s}" +
+    ".ocrwarn{color:var(--warn,#a55a00);font-size:13px;margin-top:4px}.ocrsh textarea{min-height:76px}.ocrsh details{margin:10px 0}.ocrsh pre{white-space:pre-wrap;font-size:12px;max-height:220px;overflow:auto}";
+  document.head.appendChild(css);
+  var camIn, galIn, ov, sh, cfg, busy = false;
+  function inputs() {
+    if (camIn) return;
+    function mk(cam) {
+      var el = document.createElement("input"); el.type = "file"; el.accept = "image/*"; if (cam) el.setAttribute("capture", "environment");
+      el.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0"; el.setAttribute("aria-hidden", "true"); el.tabIndex = -1;
+      document.body.appendChild(el);
+      el.addEventListener("change", function () { var f = el.files && el.files[0]; el.value = ""; if (f) run(f); });
+      return el;
+    }
+    camIn = mk(true); galIn = mk(false);
+  }
+  function close() { if (ov) { ov.remove(); ov = null; } document.removeEventListener("keydown", onKey); busy = false; }
+  function onKey(e) { if (e.key === "Escape") close(); }
+  function open(c) {
+    cfg = c; inputs(); close();
+    ov = document.createElement("div"); ov.className = "ocrov";
+    sh = document.createElement("div"); sh.className = "ocrsh"; sh.setAttribute("role", "dialog"); sh.setAttribute("aria-modal", "true"); sh.setAttribute("aria-label", "Leer oficio");
+    ov.appendChild(sh); document.body.appendChild(ov); document.addEventListener("keydown", onKey);
+    ov.addEventListener("click", function (e) { if (e.target === ov && !busy) close(); });
+    sh.addEventListener("click", onClick); stepStart();
+  }
+  function stepStart(msg) {
+    sh.innerHTML = "<h2>Leer oficio</h2>" +
+      '<p class="fine">Toma una foto del oficio o importa una imagen. La app lee el texto y llena los datos del oficio. Tú los revisas antes de usarlos.</p>' +
+      (msg ? '<p class="ocrwarn" role="alert">' + esc(msg) + "</p>" : "") +
+      '<div class="btns"><button type="button" class="primary" data-a="cam">Tomar foto del oficio</button><button type="button" data-a="gal">Importar foto o imagen</button>' +
+      '<button type="button" class="quiet" data-a="prep">Preparar para usar sin internet</button><button type="button" class="quiet" data-a="close">Cancelar</button></div>' +
+      '<p class="fine">Consejos: luz pareja, hoja plana y de frente, sin sombra del teléfono. Si importas un PDF, tómale una captura de pantalla primero. La primera vez necesita internet para descargar el lector.</p>';
+  }
+  function stepBusy(txt) {
+    busy = true; sh.innerHTML = "<h2>Leyendo el oficio</h2>" + '<p class="fine" id="ocrtxt" aria-live="polite">' + esc(txt || "Preparando…") + '</p><div class="ocrbar"><i id="ocrbar"></i></div><p class="fine">Puede tardar de 10 a 40 segundos según el teléfono. No cierres la app.</p>';
+  }
+  function prog(label, p) {
+    var t = document.getElementById("ocrtxt"), b = document.getElementById("ocrbar"); if (!t) return;
+    t.textContent = label + (p != null ? " " + Math.round(p * 100) + "%" : "…"); if (b && p != null) b.style.width = Math.round(p * 100) + "%";
+  }
+  function netMsg(e) { return e && e.message === "net" ? "No se pudo descargar el lector. Revisa tu internet e inténtalo otra vez." : "No se pudo leer la imagen. Prueba con otra foto, más clara y de frente."; }
+  function run(file) {
+    if (!sh) return; stepBusy("Preparando…");
+    readImage(file, prog).then(function (r) { busy = false; if (sh) stepResult(r); }, function (e) { busy = false; if (sh) stepStart(netMsg(e)); });
+  }
+  function stepResult(r) {
+    var p = parse(r.text), v = p.v, n = Object.keys(v).length;
+    var h = "<h2>Datos del oficio</h2>" + (n ? '<p class="fine">Revisa cada dato contra el papel y corrige lo que haga falta. Al usarlos, reemplazan lo que haya escrito en esos campos.</p>'
+      : '<p class="ocrwarn" role="alert">No se reconocieron datos. Prueba con una foto más clara.</p>');
+    FIELDS.forEach(function (f) {
+      var val = v[f[0]] || "", id = "ocr_" + f[0];
+      h += '<div class="field"><label for="' + id + '">' + f[1] + "</label>" + (f[2] === "area" ? '<textarea id="' + id + '" data-k="' + f[0] + '">' + esc(val) + "</textarea>" : '<input id="' + id + '" data-k="' + f[0] + '" type="' + f[2] + '" value="' + esc(val) + '" autocomplete="off">') +
+        (p.warn[f[0]] ? '<div class="ocrwarn">' + esc(p.warn[f[0]]) + "</div>" : (!val ? '<div class="ocrwarn">No se leyó. Escríbelo si lo necesitas.</div>' : "")) + "</div>";
+    });
+    h += '<details><summary>Ver el texto leído</summary><pre>' + esc(r.text) + "</pre></details>" +
+      '<div class="btns"><button type="button" class="primary" data-a="use">Usar estos datos</button><button type="button" data-a="again">Leer otra foto</button><button type="button" class="quiet" data-a="close">Cancelar</button></div>';
+    sh.innerHTML = h;
+  }
+  function onClick(e) {
+    var b = e.target.closest("button[data-a]"); if (!b) return; var a = b.getAttribute("data-a");
+    if (a === "close") close();
+    else if (a === "cam") camIn.click(); else if (a === "gal") galIn.click(); else if (a === "again") stepStart();
+    else if (a === "prep") { stepBusy("Descargando el lector…"); prepare(prog).then(function () { busy = false; if (sh) stepStart("Listo. El lector ya está guardado para usarlo sin internet."); }, function (er) { busy = false; if (sh) stepStart(netMsg(er)); }); }
+    else if (a === "use") {
+      var vals = {}; Array.prototype.forEach.call(sh.querySelectorAll("[data-k]"), function (el) { vals[el.getAttribute("data-k")] = el.value.trim(); });
+      var f = cfg && cfg.apply; close(); if (f) f(vals);
+    }
+  }
+  A.oficio = { open: open, parse: parse, fmt: fmt };
+  if (typeof module !== "undefined") module.exports = { parse: parse };
 })();
 </script>
 <script>if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){navigator.serviceWorker.register("sw.js").catch(function(){});}</script></body></html>
