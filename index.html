@@ -2233,11 +2233,20 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function num(x) { var n = parseFloat(String(x).replace(",", ".")); return isFinite(n) ? n : NaN; }
   /* Fórmula de la hoja "experticia": Volumen = Largo x Ancho x Espesor */
   function vol(r) { var l = num(r.L), a = num(r.A), e = num(r.E); return l > 0 && a > 0 && e > 0 ? l * a * e : null; }
+  /* Fórmula de la hoja "Cubicación de Tablones" (Smalian): V = Largo medio (m) x (Área ext. 1 + Área ext. 2) / 2; anchos y espesores en cm */
+  function volS(r) {
+    var l1 = num(r.L1), l2 = num(r.L2), a1 = num(r.A1), a2 = num(r.A2), e1 = num(r.E1), e2 = num(r.E2);
+    if (!(l1 > 0 && l2 > 0 && a1 > 0 && a2 > 0 && e1 > 0 && e2 > 0)) return null;
+    return ((l1 + l2) / 2) * (((a1 / 100) * (e1 / 100) + (a2 / 100) * (e2 / 100)) / 2);
+  }
+  var T_VOL = "Experticia método volumen m³", T_SMA = "Experticia método Smalian (tablones)";
+  function isS(i) { return i && i.metodo === "smalian"; }
+  function volOf(i, r) { return isS(i) ? volS(r) : vol(r); }
   function fmt(v) { return v == null ? "—" : v.toFixed(4); }
   var TIPOS = ["Tablas", "Tablones", "Estantillos", "Listones", "Cuartones", "Bigueta", "Rolas", "Trozas", "Postes", "Vigas"];
 
   function blank() {
-    return { id: uid(), fecha: today(), titulo: "Experticia método volumen m³", oficio: "", expN: "", fiscalia: "", lugar: "", tecnico: "", obs: "", filas: [] };
+    return { id: uid(), fecha: today(), titulo: T_VOL, metodo: "vol", oficio: "", expN: "", fiscalia: "", lugar: "", tecnico: "", obs: "", filas: [] };
   }
   function load() {
     try { var r = localStorage.getItem(KEY); if (r) { var s = JSON.parse(r); if (s && Array.isArray(s.items)) { s.cur = null; return s; } } } catch (e) {}
@@ -2247,7 +2256,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
   function persist(now) { clearTimeout(pt); if (now) save(); else pt = setTimeout(save, 300); }
   function cur() { return S.items.filter(function (i) { return i.id === S.cur; })[0]; }
-  function total(i) { var t = 0; i.filas.forEach(function (r) { var v = vol(r); if (v != null) t += v; }); return t; }
+  function total(i) { var t = 0; i.filas.forEach(function (r) { var v = volOf(i, r); if (v != null) t += v; }); return t; }
 
   function F(p, label, o) {
     o = o || {}; var v = p.split(".").reduce(function (x, k) { return x == null ? x : x[k]; }, cur()); if (v == null) v = "";
@@ -2261,7 +2270,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 
   function renderList() {
     var items = S.items.slice().sort(function (a, b) { return String(b.fecha).localeCompare(String(a.fecha)); });
-    return '<section class="card"><h2>Experticias</h2><p class="fine">Cubicación de piezas de madera: volumen = largo × ancho × espesor, con total y resumen por tipo. Exporta a Excel.</p>' +
+    return '<section class="card"><h2>Experticias</h2><p class="fine">Cubicación de piezas de madera: largo × ancho × espesor, o tablones por el método Smalian. Con total y resumen por tipo. Exporta a Excel.</p>' +
       (items.length ? "" : '<p class="hint">Aún no hay experticias. Crea la primera con el botón de abajo.</p>') +
       '<ul class="ilist">' + items.map(function (i) {
         return '<li><div class="t">' + esc(i.titulo || "Experticia") + (i.expN ? " · Exp. " + esc(i.expN) : "") + '<div class="sub">' + esc(fechaFmt(i.fecha)) + " · " + i.filas.length + " piezas · " + total(i).toFixed(3) + " m³</div></div>" +
@@ -2273,27 +2282,32 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     var head = '<button type="button" class="primary" data-oficio>Leer oficio con la cámara o una imagen</button><p class="hint">Toma una foto del oficio y la app llena los datos de abajo. Los revisas antes de usarlos.</p>' + F("titulo", "Título de la experticia") + F("oficio", "Oficio", { area: 1 }) + R2(F("fecha", "Fecha", { type: "date" }), F("expN", "Expediente N°")) + F("fiscalia", "Fiscalía / ente solicitante") + F("lugar", "Lugar de la experticia") + F("tecnico", "Técnico");
     var rows = i.filas.map(function (r, n) {
       var b = "filas." + n + ".";
+      var dims = isS(i) ?
+        R2(F(b + "L1", "Largo 1 (m)", { mode: "decimal" }), F(b + "L2", "Largo 2 (m)", { mode: "decimal" })) +
+        R2(F(b + "A1", "Ancho 1 (cm)", { mode: "decimal" }), F(b + "A2", "Ancho 2 (cm)", { mode: "decimal" })) +
+        R2(F(b + "E1", "Espesor 1 (cm)", { mode: "decimal" }), F(b + "E2", "Espesor 2 (cm)", { mode: "decimal" })) :
+        R3(F(b + "L", "Largo (m)", { mode: "decimal" }), F(b + "A", "Ancho (m)", { mode: "decimal" }), F(b + "E", "Espesor (m)", { mode: "decimal" }));
       return '<div class="rowc"><div class="rowc-h"><span class="rn">Pieza ' + (n + 1) + '</span><button type="button" class="quiet" data-dup="' + n + '">Repetir</button><button type="button" class="quiet danger" data-del="' + n + '">Quitar</button></div>' +
-        R2(F(b + "lote", "N° lote", { mode: "numeric" }), F(b + "unidad", "Unidad", { mode: "numeric" })) +
-        R3(F(b + "L", "Largo (m)", { mode: "decimal" }), F(b + "A", "Ancho (m)", { mode: "decimal" }), F(b + "E", "Espesor (m)", { mode: "decimal" })) +
+        R2(F(b + "lote", "N° lote", { mode: "numeric" }), F(b + "unidad", "Unidad", { mode: "numeric" })) + dims +
         F(b + "tipo", "Tipo", { list: "tiposMadera" }) + '<div class="calc" id="ev' + n + '"></div></div>';
     }).join("");
     return '<section class="card"><button type="button" class="quiet" data-back>← Todas las experticias</button><h2>' + esc(i.titulo || "Experticia") + "</h2></section>" +
       '<section class="card"><h2>Datos</h2>' + head + "</section>" +
-      '<section class="card"><h2>Piezas</h2><p class="hint">Volumen de cada pieza = largo × ancho × espesor, en metros. "Repetir" copia la pieza anterior con el siguiente número de unidad.</p>' + rows +
+      '<section class="card"><h2>Piezas</h2><div class="field"><label for="x_metodo">Método de cubicación</label><select id="x_metodo" data-p="metodo"><option value="vol"' + (isS(i) ? "" : " selected") + '>Largo × ancho × espesor (metros)</option><option value="smalian"' + (isS(i) ? " selected" : "") + '>Tablones, método Smalian (2 medidas por extremo)</option></select></div>' +
+      (isS(i) ? '<p class="hint">Volumen = largo medio × (área extremo 1 + área extremo 2) / 2. Largos en metros; anchos y espesores en centímetros. "Repetir" copia las medidas de la pieza anterior con el siguiente número de unidad.</p>' : '<p class="hint">Volumen de cada pieza = largo × ancho × espesor, en metros. "Repetir" copia la pieza anterior con el siguiente número de unidad.</p>') + rows +
       '<button type="button" data-add>+ Agregar pieza</button><div class="calcbox"><span id="xtot"></span></div><div id="xtipos"></div></section>' +
       '<section class="card"><h2>Observaciones</h2>' + F("obs", "Observaciones", { area: 1 }) + "</section>" +
-      '<section class="card"><h2>Exportar</h2><p class="fine">El Excel replica tu hoja de experticia, con las fórmulas, y agrega un resumen por tipo.</p><button type="button" class="primary" data-export>Descargar Excel (.xlsx)</button></section>' +
+      '<section class="card"><h2>Exportar</h2><p class="fine">El Excel replica la hoja del método elegido, con las fórmulas, y agrega un resumen por tipo.</p><button type="button" class="primary" data-export>Descargar Excel (.xlsx)</button></section>' +
       '<datalist id="tiposMadera">' + TIPOS.map(function (t) { return "<option>" + t + "</option>"; }).join("") + "</datalist>";
   }
   function byTipo(i) {
     var m = {}, ord = [];
-    i.filas.forEach(function (r) { var t = (r.tipo || "").trim() || "Sin tipo"; if (!m[t]) { m[t] = { n: 0, v: 0 }; ord.push(t); } m[t].n++; var v = vol(r); if (v != null) m[t].v += v; });
+    i.filas.forEach(function (r) { var t = (r.tipo || "").trim() || "Sin tipo"; if (!m[t]) { m[t] = { n: 0, v: 0 }; ord.push(t); } m[t].n++; var v = volOf(i, r); if (v != null) m[t].v += v; });
     return ord.map(function (t) { return { t: t, n: m[t].n, v: m[t].v }; });
   }
   function upd() {
     var i = cur(); if (!i) return;
-    i.filas.forEach(function (r, n) { var el = $("ev" + n); if (el) el.textContent = "Volumen " + (vol(r) == null ? "—" : vol(r).toFixed(4) + " m³"); });
+    i.filas.forEach(function (r, n) { var el = $("ev" + n), v = volOf(i, r); if (el) el.textContent = "Volumen " + (v == null ? "—" : v.toFixed(4) + " m³"); });
     var e = $("xtot"); if (e) e.textContent = "Total: " + total(i).toFixed(4) + " m³ en " + i.filas.length + (i.filas.length === 1 ? " pieza" : " piezas");
     var t = $("xtipos"); if (t) t.innerHTML = byTipo(i).map(function (x) { return '<div class="sub">' + esc(x.t) + ": " + x.n + " pzs · " + x.v.toFixed(4) + " m³</div>"; }).join("");
   }
@@ -2303,37 +2317,54 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   }
   function nextRow(prev) {
     var u = prev ? parseInt(prev.unidad, 10) : 0, l = prev ? parseInt(prev.lote, 10) : NaN;
-    return { lote: prev ? prev.lote : "1", unidad: String((isFinite(u) ? u : 0) + 1), L: prev ? prev.L : "", A: prev ? prev.A : "", E: prev ? prev.E : "", tipo: prev ? prev.tipo : "" };
+    var o = { lote: prev ? prev.lote : "1", unidad: String((isFinite(u) ? u : 0) + 1), tipo: prev ? prev.tipo : "" };
+    ["L", "A", "E", "L1", "L2", "A1", "A2", "E1", "E2"].forEach(function (k) { o[k] = prev ? (prev[k] || "") : ""; });
+    return o;
   }
   function slug(s) { return String(s || "experticia").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40); }
   function exportXlsx() {
     var i = cur(); if (typeof XLSX === "undefined") { toast("No cargó la librería de Excel."); return; }
     var wb = XLSX.utils.book_new();
     function q(x) { var z = num(x); return isFinite(z) ? z : x; }
-    var rows = [[i.titulo], [], [], ["Nº Lotes", "Unidad", "Largo", "Ancho", "Espesor", "Volumen M³", "Tipo"]];
-    i.filas.forEach(function (r, n) {
-      var rr = n + 5, v = vol(r);
-      rows.push([q(r.lote), q(r.unidad), q(r.L), q(r.A), q(r.E), v == null ? "" : { t: "n", v: Number(v.toFixed(6)), f: "C" + rr + "*D" + rr + "*E" + rr }, r.tipo]);
-    });
-    var last = 4 + i.filas.length;
-    rows.push(["total m3", "", "", "", "", { t: "n", v: Number(total(i).toFixed(6)), f: i.filas.length ? "SUM(F5:F" + last + ")" : "0" }]);
-    var ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [10, 10, 10, 10, 10, 14, 18].map(function (w) { return { wch: w }; }); XLSX.utils.book_append_sheet(wb, ws, "Experticia");
-    var res = [["Tipo", "Piezas", "Volumen M³"]];
+    var S_ = isS(i), SN = S_ ? "Cubicación de Tablones" : "Experticia", TC = S_ ? "I" : "G", VC = S_ ? "H" : "F", last = 4 + i.filas.length, rows, ws;
+    if (S_) {
+      rows = [["HOJA DE CUBICACIÓN DE TABLONES (MÉTODO SMALIAN)"], ["Fórmula: Volumen (m³) = Largo Medio (m) × [(Área Extremo 1 + Área Extremo 2) / 2]"], [], ["Pieza / N°", "Largo 1 (m)", "Largo 2 (m)", "Ancho 1 (cm)", "Ancho 2 (cm)", "Espesor 1 (cm)", "Espesor 2 (cm)", "Volumen (m³)", "Tipo", "Lote"]];
+      i.filas.forEach(function (r, n) {
+        var rr = n + 5, v = volS(r);
+        rows.push([(r.tipo || "Pieza") + " " + (r.unidad || n + 1), q(r.L1), q(r.L2), q(r.A1), q(r.A2), q(r.E1), q(r.E2),
+          { t: "n", v: v == null ? "" : Number(v.toFixed(6)), f: 'IF(COUNT(B' + rr + ':G' + rr + ')<6,"",((B' + rr + '+C' + rr + ')/2)*((((D' + rr + '/100)*(F' + rr + '/100))+((E' + rr + '/100)*(G' + rr + '/100)))/2))' }, r.tipo, q(r.lote)]);
+      });
+      rows.push(["TOTAL VOLUMEN", "", "", "", "", "", "", { t: "n", v: Number(total(i).toFixed(6)), f: i.filas.length ? "SUM(H5:H" + last + ")" : "0" }]);
+      ws = XLSX.utils.aoa_to_sheet(rows); ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }];
+      ws["!cols"] = [16, 11, 11, 12, 12, 13, 13, 14, 16, 8].map(function (w) { return { wch: w }; });
+    } else {
+      rows = [[i.titulo], [], [], ["Nº Lotes", "Unidad", "Largo", "Ancho", "Espesor", "Volumen M³", "Tipo"]];
+      i.filas.forEach(function (r, n) {
+        var rr = n + 5, v = vol(r);
+        rows.push([q(r.lote), q(r.unidad), q(r.L), q(r.A), q(r.E), v == null ? "" : { t: "n", v: Number(v.toFixed(6)), f: "C" + rr + "*D" + rr + "*E" + rr }, r.tipo]);
+      });
+      rows.push(["total m3", "", "", "", "", { t: "n", v: Number(total(i).toFixed(6)), f: i.filas.length ? "SUM(F5:F" + last + ")" : "0" }]);
+      ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [10, 10, 10, 10, 10, 14, 18].map(function (w) { return { wch: w }; });
+    }
+    XLSX.utils.book_append_sheet(wb, ws, SN);
+    var res = [["Tipo", "Piezas", "Volumen M³"]], RG = "'" + SN + "'!", lr = Math.max(last, 5);
     byTipo(i).forEach(function (x, k) {
-      var r = k + 2, tipoVal = x.t === "Sin tipo" ? "" : x.t;
-      res.push([x.t, { t: "n", v: x.n, f: x.t === "Sin tipo" ? "COUNTBLANK(Experticia!G5:G" + Math.max(last, 5) + ")" : "COUNTIF(Experticia!G5:G" + Math.max(last, 5) + ",A" + r + ")" },
-        { t: "n", v: Number(x.v.toFixed(6)), f: x.t === "Sin tipo" ? "SUMIF(Experticia!G5:G" + Math.max(last, 5) + ',"",Experticia!F5:F' + Math.max(last, 5) + ")" : "SUMIF(Experticia!G5:G" + Math.max(last, 5) + ",A" + r + ",Experticia!F5:F" + Math.max(last, 5) + ")" }]);
+      var r = k + 2, sin = x.t === "Sin tipo";
+      res.push([x.t, { t: "n", v: x.n, f: sin ? "COUNTBLANK(" + RG + TC + "5:" + TC + lr + ")" : "COUNTIF(" + RG + TC + "5:" + TC + lr + ",A" + r + ")" },
+        { t: "n", v: Number(x.v.toFixed(6)), f: sin ? "SUMIF(" + RG + TC + "5:" + TC + lr + ',"",' + RG + VC + "5:" + VC + lr + ")" : "SUMIF(" + RG + TC + "5:" + TC + lr + ",A" + r + "," + RG + VC + "5:" + VC + lr + ")" }]);
     });
     res.push(["Total", { t: "n", v: i.filas.length, f: "SUM(B2:B" + (1 + byTipo(i).length) + ")" }, { t: "n", v: Number(total(i).toFixed(6)), f: "SUM(C2:C" + (1 + byTipo(i).length) + ")" }]);
     var w2 = XLSX.utils.aoa_to_sheet(res); w2["!cols"] = [22, 10, 14].map(function (w) { return { wch: w }; }); XLSX.utils.book_append_sheet(wb, w2, "Resumen por tipo");
-    var d = [["Campo", "Registro"], ["Título", i.titulo], ["Fecha", fechaFmt(i.fecha)], ["Oficio", i.oficio], ["Expediente N° / causa", i.expN], ["Fiscalía / ente solicitante", i.fiscalia], ["Lugar", i.lugar], ["Técnico", i.tecnico], ["Observaciones", i.obs]];
+    var d = [["Campo", "Registro"], ["Título", i.titulo], ["Método de cubicación", isS(i) ? "Tablones, método Smalian" : "Largo × ancho × espesor"], ["Fecha", fechaFmt(i.fecha)], ["Oficio", i.oficio], ["Expediente N° / causa", i.expN], ["Fiscalía / ente solicitante", i.fiscalia], ["Lugar", i.lugar], ["Técnico", i.tecnico], ["Observaciones", i.obs]];
     var w3 = XLSX.utils.aoa_to_sheet(d); w3["!cols"] = [{ wch: 28 }, { wch: 70 }]; XLSX.utils.book_append_sheet(wb, w3, "Datos");
     var out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     if (A.deliver) A.deliver("experticia_" + slug(i.expN || i.titulo) + "_" + (i.fecha || today()) + ".xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   }
   function onInput(e) {
     var el = e.target, p = el.getAttribute && el.getAttribute("data-p"); if (!p || !cur()) return;
-    var ks = p.split("."), last = ks.pop(), o = ks.reduce(function (x, k) { return x[k]; }, cur()); o[last] = el.value; persist(); upd();
+    var ks = p.split("."), last = ks.pop(), o = ks.reduce(function (x, k) { return x[k]; }, cur()); o[last] = el.value;
+    if (p === "metodo") { var ci = cur(); if (ci.titulo === T_VOL || ci.titulo === T_SMA) ci.titulo = isS(ci) ? T_SMA : T_VOL; persist(true); render(); return; }
+    persist(); upd();
   }
   view.addEventListener("input", onInput); view.addEventListener("change", onInput);
   function twoTap(b, fn) {
@@ -2347,8 +2378,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
     if ((a = b.getAttribute("data-open"))) { S.cur = a; render(); window.scrollTo(0, 0); return; }
     if (b.hasAttribute("data-back")) { S.cur = null; save(); render(); window.scrollTo(0, 0); return; }
     if ((a = b.getAttribute("data-delinf"))) { twoTap(b, function () { S.items = S.items.filter(function (x) { return x.id !== a; }); persist(true); render(); toast("Experticia eliminada"); }); return; }
-    if (b.hasAttribute("data-add")) { var f = cur().filas; f.push(nextRow(f[f.length - 1] ? { lote: f[f.length - 1].lote, unidad: f[f.length - 1].unidad, L: "", A: "", E: "", tipo: f[f.length - 1].tipo } : null)); persist(true); render(); var cs = view.querySelectorAll(".rowc"); if (cs.length) cs[cs.length - 1].scrollIntoView({ block: "center" }); return; }
-    if ((a = b.getAttribute("data-dup"))) { var fl = cur().filas, src = fl[+a]; var cp = nextRow(src); cp.L = src.L; cp.A = src.A; cp.E = src.E; fl.splice(+a + 1, 0, cp); persist(true); render(); return; }
+    if (b.hasAttribute("data-add")) { var f = cur().filas; f.push(nextRow(f[f.length - 1] ? { lote: f[f.length - 1].lote, unidad: f[f.length - 1].unidad, tipo: f[f.length - 1].tipo } : null)); persist(true); render(); var cs = view.querySelectorAll(".rowc"); if (cs.length) cs[cs.length - 1].scrollIntoView({ block: "center" }); return; }
+    if ((a = b.getAttribute("data-dup"))) { var fl = cur().filas, src = fl[+a]; var cp = nextRow(src); fl.splice(+a + 1, 0, cp); persist(true); render(); return; }
     if ((a = b.getAttribute("data-del"))) { twoTap(b, function () { cur().filas.splice(+a, 1); persist(true); render(); }); return; }
     if (b.hasAttribute("data-oficio")) {
       if (!A.oficio) { toast("El lector de oficios no está disponible aquí."); return; }
