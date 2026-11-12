@@ -3565,7 +3565,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     try { var r = localStorage.getItem(KEY); if (r) { var s = JSON.parse(r); if (s && Array.isArray(s.items)) return s; } } catch (e) {}
     return { items: [] };
   }
-  var S = load(), cur = null, filt = "todos", pt = null;
+  var S = load(), cur = null, mode = "", filt = "todos", pt = null;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
   function persist(now) { clearTimeout(pt); if (now) save(); else pt = setTimeout(save, 300); }
   function find(id) { return S.items.filter(function (x) { return x.id === id; })[0]; }
@@ -3621,13 +3621,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
   }
   /* Recibido -> Inspección realizada -> Respondido (cuando se descarga el informe en PDF de ese trabajo) */
   function estado(r) {
+    if (r.tipo === "perm" || r.tipo === "otro") return { k: r.resp && r.resp.pdfAt ? "resp" : "rec", l: { insp: [], exp: [] } };
     var l = links(r), all = l.insp.concat(l.exp);
     var st = all.some(function (x) { return x.pdfAt; }) ? "resp" : all.length ? "insp" : "rec";
     return { k: st, l: l };
   }
   var LAB = { rec: "Recibido, sin inspección", insp: "Inspección realizada, falta informe", resp: "Respondido" };
   var COL = { rec: "#a55a00", insp: "#1d5a98", resp: "#1d5a38" };
-  function badge(k) { return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;border:1px solid ' + COL[k] + ";color:" + COL[k] + ';font-size:13px;font-weight:600">' + LAB[k] + "</span>"; }
+  function lab(r, k) { return k === "rec" && r && (r.tipo === "perm" || r.tipo === "otro") ? "Recibido, falta respuesta" : LAB[k]; }
+  function badge(k, r) { return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;border:1px solid ' + COL[k] + ";color:" + COL[k] + ';font-size:13px;font-weight:600">' + lab(r, k) + "</span>"; }
 
   /* ---------- pantallas ---------- */
   function counts() {
@@ -3649,7 +3651,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       '<ul class="ilist">' + items.map(function (x) {
         var r = x.r;
         return '<li><div class="t">' + esc(r.oficio || "Oficio sin número") + '<div class="sub">' + esc([r.fechaOf ? "del " + ff(r.fechaOf) : "", r.recibido ? "recibido " + ff(r.recibido) : "", r.fiscalia, r.causa].filter(has).join(" · ")) + "</div>" +
-          (has(r.lugar) ? '<div class="sub">' + esc(r.lugar) + "</div>" : "") + '<div style="margin-top:4px">' + badge(x.k) + "</div></div>" +
+          (has(r.lugar) ? '<div class="sub">' + esc(r.lugar) + "</div>" : "") + '<div style="margin-top:4px">' + badge(x.k, r) + "</div></div>" +
           '<div class="item-actions"><button type="button" class="primary" style="min-height:44px;font-size:16px" data-open="' + r.id + '">Abrir</button></div></li>';
       }).join("") + "</ul>" +
       '<div class="btns" style="display:grid;gap:8px;margin-top:14px"><button type="button" data-a="pdf">Reporte PDF: oficios sin respuesta</button><button type="button" data-a="xlsx">Exportar todos a Excel</button>' +
@@ -3657,13 +3659,31 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       '<p class="fine">El respaldo guarda los datos de los oficios, no las fotos ni los PDF originales.</p></section>';
   }
   var FIELDS = [["oficio", "Número de oficio", "text"], ["fechaOf", "Fecha del oficio", "date"], ["recibido", "Fecha en que se recibió", "date"], ["causa", "Causa penal", "text"], ["fiscalia", "Fiscalía", "text"], ["fiscal", "Fiscal solicitante", "text"], ["investigado", "Investigado(a)", "text"], ["delitos", "Delitos", "area"], ["lugar", "Lugar de los hechos", "area"], ["diligencias", "Diligencias solicitadas", "area"], ["obs", "Observaciones", "area"]];
+  function simple0(r) { return r.tipo === "perm" || r.tipo === "otro"; }
+  var RES = ["Posee autorización o permiso vigente", "Posee autorización o permiso, pero está vencido", "No posee autorización ni permiso registrado"];
+  function renderResp(r) {
+    var q = r.resp = r.resp || { fecha: today(), res: 0 };
+    function F(k, l, t, v) { var id = "rsp_" + k; return '<div class="field"><label for="' + id + '">' + l + "</label>" + (t === "area" ? '<textarea id="' + id + '" data-r="' + k + '">' + esc(v || "") + "</textarea>" : '<input id="' + id + '" data-r="' + k + '" type="' + t + '" value="' + esc(v || "") + '">') + "</div>"; }
+    var h = '<section class="card"><button type="button" class="quiet" data-a="rback">← Volver al oficio</button><h2>Respuesta al oficio</h2><p class="fine">' + esc(r.oficio || "") + (has(r.investigado) ? " · " + esc(r.investigado) : "") + "</p>";
+    h += F("nro", "Número del oficio de respuesta", "text", q.nro) + F("fecha", "Fecha de la respuesta", "date", q.fecha);
+    if (r.tipo === "perm") {
+      h += '<div class="field"><label for="rsp_res">Resultado de la verificación</label><select id="rsp_res" data-r="res">' + RES.map(function (t, n) { return '<option value="' + n + '"' + (+q.res === n ? " selected" : "") + ">" + t + "</option>"; }).join("") + "</select></div>";
+      if (+q.res !== 2) h += F("tipoAut", "Tipo de autorización o permiso", "text", q.tipoAut) + F("nroAut", "Número de la autorización", "text", q.nroAut) + F("fechaEm", "Fecha de emisión", "date", q.fechaEm) + F("vig", "Vigente hasta (o fecha en que venció)", "date", q.vig);
+      h += F("obs", "Observaciones (opcional)", "area", q.obs);
+    } else h += F("texto", "Texto de la respuesta", "area", q.texto);
+    h += F("firma", "Firma: nombre y cargo", "area", q.firma);
+    h += '<div class="btns" style="display:grid;gap:8px;margin-top:14px"><button type="button" class="primary" data-a="rpdf">Descargar oficio de respuesta (PDF)</button></div><p class="fine">Al descargarlo, el oficio pasa a «Respondido».</p></section>';
+    return h;
+  }
   function renderDetail(r) {
     var e = estado(r), l = e.l;
-    var h = '<section class="card"><button type="button" class="quiet" data-a="back">← Volver a la lista</button><h2>' + esc(r.oficio || "Oficio") + "</h2><div>" + badge(e.k) + "</div>";
-    h += '<p class="fine">' + (e.k === "rec" ? "Aún no hay inspección ni experticia con este número de oficio." : e.k === "insp" ? "Hay inspección o experticia con este oficio. Pasa a «Respondido» cuando descargues su informe en PDF." : "Ya se descargó el informe en PDF de este oficio.") + "</p>";
+    var h = '<section class="card"><button type="button" class="quiet" data-a="back">← Volver a la lista</button><h2>' + esc(r.oficio || "Oficio") + "</h2><div>" + badge(e.k, r) + "</div>";
+    h += '<p class="fine">' + (e.k === "rec" ? (r.tipo === "perm" || r.tipo === "otro" ? "Aún no se ha descargado el oficio de respuesta. Al descargarlo pasa a «Respondido»." : "Aún no hay inspección ni experticia con este número de oficio.") : e.k === "insp" ? "Hay inspección o experticia con este oficio. Pasa a «Respondido» cuando descargues su informe en PDF." : (simple0(r) ? "Ya se descargó el oficio de respuesta." : "Ya se descargó el informe en PDF de este oficio.")) + "</p>";
+    h += '<div class="field"><label for="ofi_tipo">Tipo de oficio</label><select id="ofi_tipo" data-k="tipo"><option value="insp"' + (!r.tipo || r.tipo === "insp" ? " selected" : "") + '>Solicita inspección o experticia</option><option value="perm"' + (r.tipo === "perm" ? " selected" : "") + '>Consulta de permiso o autorización</option><option value="otro"' + (r.tipo === "otro" ? " selected" : "") + ">Otro (se responde por oficio)</option></select></div>";
+    var simple = r.tipo === "perm" || r.tipo === "otro";
     h += '<div class="btns" style="display:grid;gap:8px;margin:10px 0">' +
       (r.fileId ? '<button type="button" data-a="orig">Ver oficio original (' + esc(r.fileName || "archivo") + ")</button>" : "") +
-      '<button type="button" class="primary" data-a="mkinsp">Crear inspección MP con estos datos</button><button type="button" data-a="mkexp">Crear experticia con estos datos</button></div>';
+      (simple ? '<button type="button" class="primary" data-a="resp">Preparar respuesta</button>' : '<button type="button" class="primary" data-a="mkinsp">Crear inspección MP con estos datos</button><button type="button" data-a="mkexp">Crear experticia con estos datos</button>') + "</div>";
     if (l.insp.length || l.exp.length) {
       h += '<p class="fine"><b>Trabajos vinculados:</b></p><ul class="ilist">' +
         l.insp.map(function (i) { return '<li><div class="t">Inspección MP · ' + esc(ff(i.g && i.g.fecha)) + '<div class="sub">' + (i.pdfAt ? "Informe PDF descargado" : "Informe PDF pendiente") + "</div></div></li>"; }).join("") +
@@ -3677,11 +3697,15 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     return h;
   }
   function render() {
-    view.innerHTML = cur && find(cur) ? renderDetail(find(cur)) : (cur = null, renderList());
+    view.innerHTML = cur && find(cur) ? (mode === "resp" ? renderResp(find(cur)) : renderDetail(find(cur))) : (cur = null, renderList());
     if (!cur) { var n = $("countOfi"); if (n) n.textContent = S.items.length + (S.items.length === 1 ? " oficio" : " oficios"); }
   }
 
   /* ---------- crear / cargar ---------- */
+  function dupOf(num, exceptId) {
+    var k = key(num); if (!k) return null;
+    return S.items.filter(function (x) { return x.id !== exceptId && key(x.oficio) === k; })[0] || null;
+  }
   function newRec(v, file) {
     var r = { id: uid(), creado: today() };
     FIELDS.forEach(function (f) { r[f[0]] = v && v[f[0]] ? v[f[0]] : ""; });
@@ -3694,7 +3718,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
   }
   function doLoad() {
     if (!A.oficio) { toast("El lector de oficios no está disponible aquí."); return; }
-    A.oficio.open({ apply: function (v, file) { newRec(v, file); toast("Oficio guardado"); } });
+    A.oficio.open({ apply: function (v, file) {
+      var d = dupOf(v.oficio);
+      if (d) {
+        var k = estado(d).k;
+        if (window.confirm("Este oficio ya está cargado en el sistema.\n\n" + (d.oficio || "") + (d.fiscalia ? "\n" + d.fiscalia : "") + "\nEstado: " + lab(d, k) + "\n\nAceptar: abrir el que ya existe.\nCancelar: guardarlo de todos modos como nuevo.")) { cur = d.id; mode = ""; render(); window.scrollTo(0, 0); toast("Oficio ya registrado"); return; }
+      }
+      newRec(v, file); toast("Oficio guardado");
+    } });
   }
   function viewOrig(r) {
     getFile(r.fileId).then(function (b) {
@@ -3723,17 +3754,47 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       P.table(["N.º", "Oficio", "Fecha", "Fiscalía / fiscal", "Causa", "Lugar", "Estado"],
         list.map(function (x, n) {
           var r = x.r;
-          return [String(n + 1), e(r.oficio || ""), e(ff(r.recibido || r.fechaOf)), e([r.fiscalia, r.fiscal].filter(has).join(", ")), e(r.causa || ""), e(r.lugar || ""), x.k === "rec" ? "Sin inspección" : "Falta informe"];
+          return [String(n + 1), e(r.oficio || ""), e(ff(r.recibido || r.fechaOf)), e([r.fiscalia, r.fiscal].filter(has).join(", ")), e(r.causa || ""), e(r.lugar || ""), x.k === "rec" ? (x.r.tipo === "perm" || x.r.tipo === "otro" ? "Falta respuesta" : "Sin inspección") : "Falta informe"];
         }), [22, 84, 48, 88, 60, 68, 72], ["l", "l", "l", "l", "l", "l", "l"], { fs: 7.5 });
     }
     P.p("El estado se determina por los trabajos registrados con el mismo número de oficio: «Sin inspección» cuando no hay inspección ni experticia, y «Falta informe» cuando existe el trabajo pero no se ha descargado su informe en PDF.", { fs: 9 });
     P.save("oficios-pendientes_" + today() + ".pdf");
   }
+  function respPdf(r) {
+    var X = A.pdf; if (!X) { toast("El generador de PDF no está disponible."); return; }
+    var q = r.resp || {}, P; try { P = new X.Doc(); } catch (er) { toast(er.message); return; }
+    var e = X.esc, hl = X.hl;
+    function v(t, ph) { return has(t) ? e(t) : hl(ph); }
+    function d(t, ph) { return has(t) ? X.fmtDate(t) : hl(ph); }
+    P.title("OFICIO DE RESPUESTA", "Unidad Técnica Ecosocialista (UTEC) Apure", "Oficio N.º " + (has(q.nro) ? q.nro : "[por completar]"));
+    P.p("San Fernando de Apure, " + d(q.fecha, "fecha"), { align: "right" });
+    P.p("Ciudadano(a): " + v(r.fiscal, "fiscal") + (has(r.fiscalia) ? ", " + e(r.fiscalia) : ""), { after: 4 });
+    P.p("Presente.-");
+    var ref = "En atención a su oficio " + v(r.oficio, "número de oficio") + (has(r.fechaOf) ? ", de fecha " + X.fmtDate(r.fechaOf) : "") + (has(r.causa) ? ", relacionado con la causa penal " + e(r.causa) : "") + ", mediante el cual solicita" + (r.tipo === "perm" ? " información sobre si " + (has(r.investigado) ? "el ciudadano(a) **" + e(r.investigado) + "**" : hl("investigado")) + " posee algún permiso o autorización vigente" : " lo siguiente: " + (has(r.diligencias) ? e(r.diligencias) : hl("diligencia solicitada"))) + ", cumplo en informar lo siguiente:";
+    P.p(ref, { just: true });
+    if (r.tipo === "perm") {
+      var n = +q.res || 0, who = has(r.investigado) ? "**" + e(r.investigado) + "**" : hl("investigado"), t;
+      var aut = (has(q.tipoAut) ? e(q.tipoAut) : "autorización o permiso") + (has(q.nroAut) ? " N.º " + e(q.nroAut) : "");
+      if (n === 0) t = "Revisados los registros que reposan en esta Unidad, el ciudadano(a) " + who + " consta con la " + aut + ", emitida el " + d(q.fechaEm, "fecha de emisión") + ", con vigencia hasta el " + d(q.vig, "fecha de vigencia") + ".";
+      else if (n === 1) t = "Revisados los registros que reposan en esta Unidad, el ciudadano(a) " + who + " consta con la " + aut + ", emitida el " + d(q.fechaEm, "fecha de emisión") + ", cuya vigencia culminó el " + d(q.vig, "fecha de vencimiento") + ", por lo que **no se encuentra vigente**.";
+      else t = "Revisados los registros que reposan en esta Unidad, **no consta** autorización ni permiso alguno a nombre del ciudadano(a) " + who + ".";
+      P.p(t, { just: true });
+      if (has(q.obs)) String(q.obs).split(/\n+/).forEach(function (x) { if (x.trim()) P.p(e(x.trim()), { just: true }); });
+    } else {
+      if (has(q.texto)) String(q.texto).split(/\n+/).forEach(function (x) { if (x.trim()) P.p(e(x.trim()), { just: true }); }); else P.p(hl("texto de la respuesta"));
+    }
+    P.p("Sin otro particular al cual hacer referencia, me despido de usted.", { just: true });
+    P.p("Atentamente,", { align: "center" });
+    P.sign([has(q.firma) ? String(q.firma).split(/\n+/).map(e).join(" – ") : hl("nombre y cargo")]);
+    r.resp.pdfAt = new Date().toISOString(); persist(true);
+    P.save("oficio-respuesta_" + String(r.oficio || "oficio").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) + "_" + today() + ".pdf");
+    render();
+  }
   function exportXlsx() {
     if (typeof XLSX === "undefined") { toast("El generador de Excel no está disponible."); return; }
     var rows = [["N.º", "Oficio", "Fecha del oficio", "Recibido", "Fiscalía", "Fiscal", "Causa", "Investigado(a)", "Delitos", "Lugar", "Diligencias", "Estado", "Observaciones"]];
     S.items.slice().sort(function (a, b) { return sortKey(a).localeCompare(sortKey(b)); }).forEach(function (r, n) {
-      rows.push([n + 1, r.oficio, ff(r.fechaOf), ff(r.recibido), r.fiscalia, r.fiscal, r.causa, r.investigado, r.delitos, r.lugar, r.diligencias, LAB[estado(r).k], r.obs]);
+      rows.push([n + 1, r.oficio, ff(r.fechaOf), ff(r.recibido), r.fiscalia, r.fiscal, r.causa, r.investigado, r.delitos, r.lugar, r.diligencias, lab(r, estado(r).k), r.obs]);
     });
     var ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [5, 24, 14, 14, 30, 30, 18, 30, 30, 36, 40, 30, 30].map(function (w) { return { wch: w }; });
     var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Oficios");
@@ -3763,24 +3824,34 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
 
   /* ---------- eventos ---------- */
   view.addEventListener("input", function (e) {
-    var k = e.target.getAttribute && e.target.getAttribute("data-k"), r = cur && find(cur); if (!k || !r) return;
-    r[k] = e.target.value; persist();
+    var k = e.target.getAttribute && e.target.getAttribute("data-k"), r = cur && find(cur), rk = e.target.getAttribute && e.target.getAttribute("data-r");
+    if (rk && r) { r.resp = r.resp || {}; r.resp[rk] = e.target.value; if (rk === "res") { persist(true); render(); } else persist(); return; }
+    if (!k || !r) return;
+    r[k] = e.target.value; if (k === "tipo") { persist(true); render(); } else persist();
+  });
+  view.addEventListener("change", function (e) {
+    var t = e.target; if (!t.getAttribute || t.getAttribute("data-k") !== "oficio" || !cur) return;
+    var d = dupOf(t.value, cur);
+    if (d) { toast("Ojo: ya hay otro oficio con este número (" + lab(d, estado(d).k) + ")."); }
   });
   var delArm = false;
   view.addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b) return;
     var a = b.getAttribute("data-a"), f = b.getAttribute("data-f"), o = b.getAttribute("data-open"), r = cur && find(cur);
     if (f) { filt = f; render(); return; }
-    if (o) { cur = o; render(); window.scrollTo(0, 0); return; }
+    if (o) { cur = o; mode = ""; render(); window.scrollTo(0, 0); return; }
     if (a === "load") doLoad();
     else if (a === "manual") newRec({}, null);
-    else if (a === "back") { persist(true); cur = null; render(); }
+    else if (a === "back") { persist(true); cur = null; mode = ""; render(); }
+    else if (a === "resp" && r) { mode = "resp"; render(); window.scrollTo(0, 0); }
+    else if (a === "rback") { persist(true); mode = ""; render(); }
+    else if (a === "rpdf" && r) respPdf(r);
     else if (a === "orig" && r) viewOrig(r);
     else if (a === "mkinsp" && r) { persist(true); if (A.insp) A.insp.createFrom(r); }
     else if (a === "mkexp" && r) { persist(true); if (A.exp) A.exp.createFrom(r); }
     else if (a === "del" && r) {
       if (!delArm) { delArm = true; b.textContent = "Toca otra vez para eliminar"; setTimeout(function () { delArm = false; if (b.isConnected) b.textContent = "Eliminar este oficio"; }, 3500); return; }
-      delArm = false; delFile(r.id); S.items = S.items.filter(function (x) { return x.id !== r.id; }); persist(true); cur = null; render(); toast("Oficio eliminado");
+      delArm = false; delFile(r.id); S.items = S.items.filter(function (x) { return x.id !== r.id; }); persist(true); cur = null; mode = ""; render(); toast("Oficio eliminado");
     }
     else if (a === "pdf") exportPdf();
     else if (a === "xlsx") exportXlsx();
@@ -3788,7 +3859,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     else if (a === "rest") restore();
   });
   /* al entrar a la sección se recalcula el estado con lo último guardado */
-  var nav = $("navOfi"); if (nav) nav.addEventListener("click", function () { persist(true); cur = null; render(); });
+  var nav = $("navOfi"); if (nav) nav.addEventListener("click", function () { persist(true); cur = null; mode = ""; render(); });
   A.ofi = { list: function () { return S.items; }, estado: estado };
   render();
 })();
