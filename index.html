@@ -235,7 +235,9 @@ details.meta .row { margin-top: 10px; }
 .tag.s { background: var(--accent-soft); color: var(--accent); }
 header.top { flex-direction: column; align-items: stretch; gap: 8px; }
 .toprow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.nav { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.nav button { grid-column: span 2; }
+.nav button:nth-child(n+4) { grid-column: span 3; }
 .nav button { min-height: 40px; padding: 6px 4px; font-family: var(--font-display); font-size: 16px; letter-spacing: 0.03em; text-transform: uppercase; }
 .nav button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .view { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
@@ -357,12 +359,14 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       <div class="count" id="countInsp" aria-live="polite" hidden>0 inspecciones</div>
       <div class="count" id="countR114" aria-live="polite" hidden>0 informes</div>
       <div class="count" id="countExp" aria-live="polite" hidden>0 experticias</div>
+      <div class="count" id="countOfi" aria-live="polite" hidden>0 oficios</div>
     </div>
     <nav class="nav" aria-label="Secciones">
       <button type="button" id="navInv" aria-pressed="true">Inventario</button>
       <button type="button" id="navInsp" aria-pressed="false">Inspección MP</button>
       <button type="button" id="navR114" aria-pressed="false">Regional 114</button>
       <button type="button" id="navExp" aria-pressed="false">Experticia</button>
+      <button type="button" id="navOfi" aria-pressed="false">Oficios</button>
     </nav>
     <div class="gpsbar"><span class="dot" id="gpsDot"></span><span id="gpsTxt">GPS: iniciando…</span><button type="button" class="quiet" id="gpsToggle">Pausar</button></div>
   </header>
@@ -490,6 +494,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
   <div class="view" id="viewInsp" hidden></div>
   <div class="view" id="viewR114" hidden></div>
   <div class="view" id="viewExp" hidden></div>
+  <div class="view" id="viewOfi" hidden></div>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 
@@ -2332,6 +2337,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       var fn = has(g.funcionarios) ? String(g.funcionarios).split(/\n+/).filter(function (x) { return x.trim(); }).slice(0, 4).map(e) : [has(k.func) ? e(k.func) + (has(k.cedula) ? ", C.I. " + e(k.cedula) : "") : X.hl("por completar")];
       P.sign(fn);
       var slug = String(g.lugar || g.causa || "inspeccion").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+      i.pdfAt = new Date().toISOString(); persist(true);
       P.save("informe-inspeccion-mp_" + slug + "_" + (g.fecha || today()) + ".pdf");
     }
     if (!pend) { build(); return; }
@@ -2450,8 +2456,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
   });
 
   /* ---------- navegación entre secciones ---------- */
-  var TITLES = { inv: "Inventario de árboles", insp: "Inspección técnica", r114: "Regional 114", exp: "Experticia" };
-  var NAVS = { inv: "navInv", insp: "navInsp", r114: "navR114", exp: "navExp" }, VIEWS = { inv: "viewInv", insp: "viewInsp", r114: "viewR114", exp: "viewExp" }, COUNTS = { inv: "count", insp: "countInsp", r114: "countR114", exp: "countExp" };
+  var TITLES = { inv: "Inventario de árboles", insp: "Inspección técnica", r114: "Regional 114", exp: "Experticia", ofi: "Oficios" };
+  var NAVS = { inv: "navInv", insp: "navInsp", r114: "navR114", exp: "navExp", ofi: "navOfi" }, VIEWS = { inv: "viewInv", insp: "viewInsp", r114: "viewR114", exp: "viewExp", ofi: "viewOfi" }, COUNTS = { inv: "count", insp: "countInsp", r114: "countR114", exp: "countExp", ofi: "countOfi" };
   function showView(v) {
     if (!TITLES[v]) v = "inv";
     Object.keys(TITLES).forEach(function (k) {
@@ -2461,6 +2467,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     $("appTitle").textContent = TITLES[v];
     try { localStorage.setItem(VKEY, v); } catch (e) {}
   }
+  A.showView = showView;
+  A.insp = { list: function () { return S.items; }, createFrom: function (r) {
+    var n = blank(), f = A.oficio ? A.oficio.fmt : function (x) { return x; };
+    n.ofId = r.id; n.g.oficio = "N° " + String(r.oficio || "").replace(/^N\S{0,3}\s*/i, "") + (r.fechaOf ? ", del " + f(r.fechaOf) : "") + (r.recibido ? " (recibido el " + f(r.recibido) + ")" : "");
+    n.g.causa = (r.causa || "") + (r.fiscalia ? (r.causa ? ", " : "") + r.fiscalia : ""); n.g.fiscal = r.fiscal || ""; n.g.investigado = r.investigado || ""; n.g.delitos = r.delitos || ""; n.g.lugar = r.lugar || ""; n.g.dilSol = r.diligencias || "";
+    S.items.push(n); S.cur = n.id; open = { 1: true }; persist(true); render(); showView("insp"); window.scrollTo(0, 0);
+  } };
   Object.keys(NAVS).forEach(function (k) { $(NAVS[k]).addEventListener("click", function () { showView(k); window.scrollTo(0, 0); }); });
   var storeOK = true;
   try { localStorage.setItem("__t", "1"); localStorage.removeItem("__t"); } catch (e) { storeOK = false; }
@@ -3250,6 +3263,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     if (has(i.obs)) { H("Observaciones"); String(i.obs).split(/\n+/).forEach(function (x) { if (x.trim()) P.p(e(x.trim())); }); }
     sec++; P.h(sec + ". Firmas");
     P.sign([has(i.tecnico) ? e(i.tecnico) : X.hl("por completar")]);
+    i.pdfAt = new Date().toISOString(); persist(true);
     P.save("informe-experticia_" + slug(i.expN || i.titulo) + "_" + (i.fecha || today()) + ".pdf");
   }
 
@@ -3291,6 +3305,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     if (b.hasAttribute("data-pdf")) { exportPdf(); return; }
     if (b.hasAttribute("data-export")) { exportXlsx(); return; }
   });
+  A.exp = { list: function () { return S.items; }, createFrom: function (r) {
+    var n = blank(), f = A.oficio ? A.oficio.fmt : function (x) { return x; };
+    n.ofId = r.id; n.oficio = "N° " + String(r.oficio || "").replace(/^N\S{0,3}\s*/i, "") + (r.fechaOf ? ", del " + f(r.fechaOf) : "") + (r.recibido ? " (recibido el " + f(r.recibido) + ")" : "");
+    n.expN = r.causa || ""; n.fiscalia = [r.fiscalia, r.fiscal].filter(Boolean).join(", "); n.lugar = r.lugar || "";
+    n.obs = [r.investigado ? "Investigado(a): " + r.investigado : "", r.delitos ? "Delitos: " + r.delitos : "", r.diligencias ? "Diligencias solicitadas: " + r.diligencias : ""].filter(Boolean).join("\n");
+    S.items.push(n); S.cur = n.id; persist(true); render(); if (A.showView) A.showView("exp"); window.scrollTo(0, 0);
+  } };
   render();
 })();
 </script>
@@ -3407,6 +3428,41 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       function (e) { if (W) { try { W.terminate(); } catch (x) {} } throw e; });
   }
 
+
+  /* ---------- PDF: texto o primera página como imagen ---------- */
+  var PDFV = "3.11.174", PDFB = "https://cdn.jsdelivr.net/npm/pdfjs-dist@" + PDFV + "/build/", pdfP = null;
+  function loadPdf() {
+    if (window.pdfjsLib) return Promise.resolve();
+    if (pdfP) return pdfP;
+    pdfP = new Promise(function (ok, no) {
+      var s = document.createElement("script"); s.src = PDFB + "pdf.min.js"; s.async = true;
+      s.onload = function () { if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFB + "pdf.worker.min.js"; ok(); } else no(new Error("net")); };
+      s.onerror = function () { pdfP = null; no(new Error("net")); };
+      document.head.appendChild(s);
+    });
+    return pdfP;
+  }
+  function pdfRead(file, onProg) {
+    if (onProg) onProg("Abriendo el PDF", null);
+    return loadPdf().then(function () { return file.arrayBuffer(); }).then(function (buf) {
+      return window.pdfjsLib.getDocument({ data: buf }).promise;
+    }).then(function (doc) {
+      return doc.getPage(1).then(function (pg) {
+        return pg.getTextContent().then(function (tc) {
+          var line = [], out = "", lastY = null;
+          tc.items.forEach(function (it) { var y = Math.round(it.transform[5]); if (lastY !== null && Math.abs(y - lastY) > 3) { out += line.join(" ") + "\n"; line = []; } line.push(it.str); lastY = y; });
+          out += line.join(" ");
+          if (out.replace(/\s/g, "").length > 200) return { text: out, conf: 100 };
+          var vp0 = pg.getViewport({ scale: 1 }), k = Math.min(3, 2400 / Math.max(vp0.width, vp0.height)), vp = pg.getViewport({ scale: k });
+          var c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+          return pg.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise.then(function () {
+            return new Promise(function (res) { c.toBlob(function (b) { res(b); }, "image/jpeg", 0.92); });
+          }).then(function (blob) { return readImage(blob, onProg); });
+        });
+      });
+    });
+  }
+
   /* ---------- ventana ---------- */
   var FIELDS = [
     ["oficio", "Número de oficio", "text"], ["fechaOf", "Fecha del oficio", "date"], ["recibido", "Fecha en que se recibió", "date"],
@@ -3424,7 +3480,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
   function inputs() {
     if (camIn) return;
     function mk(cam) {
-      var el = document.createElement("input"); el.type = "file"; el.accept = "image/*"; if (cam) el.setAttribute("capture", "environment");
+      var el = document.createElement("input"); el.type = "file"; el.accept = cam ? "image/*" : "image/*,application/pdf,.pdf"; if (cam) el.setAttribute("capture", "environment");
       el.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0"; el.setAttribute("aria-hidden", "true"); el.tabIndex = -1;
       document.body.appendChild(el);
       el.addEventListener("change", function () { var f = el.files && el.files[0]; el.value = ""; if (f) run(f); });
@@ -3446,9 +3502,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     sh.innerHTML = "<h2>Leer oficio</h2>" +
       '<p class="fine">Toma una foto del oficio o importa una imagen. La app lee el texto y llena los datos del oficio. Tú los revisas antes de usarlos.</p>' +
       (msg ? '<p class="ocrwarn" role="alert">' + esc(msg) + "</p>" : "") +
-      '<div class="btns"><button type="button" class="primary" data-a="cam">Tomar foto del oficio</button><button type="button" data-a="gal">Importar foto o imagen</button>' +
+      '<div class="btns"><button type="button" class="primary" data-a="cam">Tomar foto del oficio</button><button type="button" data-a="gal">Importar imagen o PDF</button>' +
       '<button type="button" class="quiet" data-a="prep">Preparar para usar sin internet</button><button type="button" class="quiet" data-a="close">Cancelar</button></div>' +
-      '<p class="fine">Consejos: luz pareja, hoja plana y de frente, sin sombra del teléfono. Si importas un PDF, tómale una captura de pantalla primero. La primera vez necesita internet para descargar el lector.</p>';
+      '<p class="fine">Consejos: luz pareja, hoja plana y de frente, sin sombra del teléfono. Los PDF se leen directo; si es un PDF escaneado se lee como imagen. La primera vez necesita internet para descargar el lector.</p>';
   }
   function stepBusy(txt) {
     busy = true; sh.innerHTML = "<h2>Leyendo el oficio</h2>" + '<p class="fine" id="ocrtxt" aria-live="polite">' + esc(txt || "Preparando…") + '</p><div class="ocrbar"><i id="ocrbar"></i></div><p class="fine">Puede tardar de 10 a 40 segundos según el teléfono. No cierres la app.</p>';
@@ -3457,10 +3513,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     var t = document.getElementById("ocrtxt"), b = document.getElementById("ocrbar"); if (!t) return;
     t.textContent = label + (p != null ? " " + Math.round(p * 100) + "%" : "…"); if (b && p != null) b.style.width = Math.round(p * 100) + "%";
   }
-  function netMsg(e) { return e && e.message === "net" ? "No se pudo descargar el lector. Revisa tu internet e inténtalo otra vez." : "No se pudo leer la imagen. Prueba con otra foto, más clara y de frente."; }
+  function netMsg(e) { return e && e.message === "net" ? "No se pudo descargar el lector (o el visor de PDF). Revisa tu internet e inténtalo otra vez." : "No se pudo leer la imagen. Prueba con otra foto, más clara y de frente."; }
+  function isPdf(f) { return f && (f.type === "application/pdf" || /\.pdf$/i.test(f.name || "")); }
+  var lastFile = null;
   function run(file) {
-    if (!sh) return; stepBusy("Preparando…");
-    readImage(file, prog).then(function (r) { busy = false; if (sh) stepResult(r); }, function (e) { busy = false; if (sh) stepStart(netMsg(e)); });
+    if (!sh) return; stepBusy("Preparando…"); lastFile = file;
+    (isPdf(file) ? pdfRead(file, prog) : readImage(file, prog)).then(function (r) { busy = false; if (sh) stepResult(r); }, function (e) { busy = false; if (sh) stepStart(netMsg(e)); });
   }
   function stepResult(r) {
     var p = parse(r.text), v = p.v, n = Object.keys(v).length;
@@ -3482,11 +3540,257 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     else if (a === "prep") { stepBusy("Descargando el lector…"); prepare(prog).then(function () { busy = false; if (sh) stepStart("Listo. El lector ya está guardado para usarlo sin internet."); }, function (er) { busy = false; if (sh) stepStart(netMsg(er)); }); }
     else if (a === "use") {
       var vals = {}; Array.prototype.forEach.call(sh.querySelectorAll("[data-k]"), function (el) { vals[el.getAttribute("data-k")] = el.value.trim(); });
-      var f = cfg && cfg.apply; close(); if (f) f(vals);
+      var f = cfg && cfg.apply, lf = lastFile; close(); if (f) f(vals, lf);
     }
   }
   A.oficio = { open: open, parse: parse, fmt: fmt };
   if (typeof module !== "undefined") module.exports = { parse: parse };
+})();
+</script><script>(function () {
+  var A = window.APP || {};
+  var KEY = "oficios-v1", IK = "inspecciones-mp-v1", EK = "experticias-v1";
+  var $ = function (id) { return document.getElementById(id); };
+  var view = $("viewOfi");
+  if (!view) return;
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function ff(s) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ""); return m ? m[3] + "-" + m[2] + "-" + m[1] : (s || ""); }
+  function uid() { return "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function toast(t) { if (A.toast) A.toast(t); }
+  function has(t) { return String(t == null ? "" : t).trim() !== ""; }
+
+  /* ---------- datos ---------- */
+  function load() {
+    try { var r = localStorage.getItem(KEY); if (r) { var s = JSON.parse(r); if (s && Array.isArray(s.items)) return s; } } catch (e) {}
+    return { items: [] };
+  }
+  var S = load(), cur = null, filt = "todos", pt = null;
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function persist(now) { clearTimeout(pt); if (now) save(); else pt = setTimeout(save, 300); }
+  function find(id) { return S.items.filter(function (x) { return x.id === id; })[0]; }
+
+  /* ---------- archivos originales (IndexedDB con respaldo en memoria) ---------- */
+  var mem = {}, dbp = null;
+  function db() {
+    if (dbp) return dbp;
+    dbp = new Promise(function (ok) {
+      try {
+        var rq = indexedDB.open("oficios-files", 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore("f"); };
+        rq.onsuccess = function () { ok(rq.result); }; rq.onerror = function () { ok(null); };
+      } catch (e) { ok(null); }
+    });
+    return dbp;
+  }
+  function putFile(id, blob) {
+    mem[id] = blob;
+    return db().then(function (d) { if (!d) return; return new Promise(function (ok) { try { var tx = d.transaction("f", "readwrite"); tx.objectStore("f").put(blob, id); tx.oncomplete = tx.onerror = tx.onabort = function () { ok(); }; } catch (e) { ok(); } }); });
+  }
+  function getFile(id) {
+    if (mem[id]) return Promise.resolve(mem[id]);
+    return db().then(function (d) { if (!d) return null; return new Promise(function (ok) { try { var r = d.transaction("f").objectStore("f").get(id); r.onsuccess = function () { ok(r.result || null); }; r.onerror = function () { ok(null); }; } catch (e) { ok(null); } }); });
+  }
+  function delFile(id) { delete mem[id]; db().then(function (d) { if (d) try { d.transaction("f", "readwrite").objectStore("f").delete(id); } catch (e) {} }); }
+  function shrinkImg(file) {
+    return new Promise(function (ok) {
+      if (!/^image\//.test(file.type) || file.size < 1200000) { ok(file); return; }
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () {
+        var k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas");
+        c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+        c.getContext("2d").drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(function (b) { ok(b || file); }, "image/jpeg", 0.85);
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); ok(file); };
+      im.src = url;
+    });
+  }
+
+  /* ---------- estado automático: nadie lo marca a mano ---------- */
+  function key(s) { var m = /(\d{2}-[A-Za-z]\d{1,2}-\d{3,4}-20\d{2})/.exec(String(s || "")); return m ? m[1].toUpperCase() : ""; }
+  function readItems(k, mod) {
+    if (mod && mod.list) { try { return mod.list(); } catch (e) {} }
+    try { var s = JSON.parse(localStorage.getItem(k) || "null"); return s && Array.isArray(s.items) ? s.items : []; } catch (e) { return []; }
+  }
+  function links(r) {
+    var rk = key(r.oficio), out = { insp: [], exp: [] };
+    readItems(IK, A.insp).forEach(function (i) { if (i.ofId === r.id || (rk && key(i.g && i.g.oficio) === rk)) out.insp.push(i); });
+    readItems(EK, A.exp).forEach(function (i) { if (i.ofId === r.id || (rk && key(i.oficio) === rk)) out.exp.push(i); });
+    return out;
+  }
+  /* Recibido -> Inspección realizada -> Respondido (cuando se descarga el informe en PDF de ese trabajo) */
+  function estado(r) {
+    var l = links(r), all = l.insp.concat(l.exp);
+    var st = all.some(function (x) { return x.pdfAt; }) ? "resp" : all.length ? "insp" : "rec";
+    return { k: st, l: l };
+  }
+  var LAB = { rec: "Recibido, sin inspección", insp: "Inspección realizada, falta informe", resp: "Respondido" };
+  var COL = { rec: "#a55a00", insp: "#1d5a98", resp: "#1d5a38" };
+  function badge(k) { return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;border:1px solid ' + COL[k] + ";color:" + COL[k] + ';font-size:13px;font-weight:600">' + LAB[k] + "</span>"; }
+
+  /* ---------- pantallas ---------- */
+  function counts() {
+    var c = { todos: S.items.length, rec: 0, insp: 0, resp: 0, pend: 0 };
+    S.items.forEach(function (r) { var k = estado(r).k; c[k]++; if (k !== "resp") c.pend++; });
+    return c;
+  }
+  function chip(k, t, n) { return '<button type="button" data-f="' + k + '" aria-pressed="' + (filt === k) + '" style="min-height:40px;font-size:15px">' + t + " (" + n + ")</button>"; }
+  function sortKey(r) { return String(r.recibido || r.fechaOf || r.creado || ""); }
+  function renderList() {
+    var c = counts(), n = $("countOfi"); if (n) n.textContent = c.todos + (c.todos === 1 ? " oficio" : " oficios");
+    var items = S.items.map(function (r) { return { r: r, k: estado(r).k }; }).filter(function (x) {
+      return filt === "todos" || (filt === "pend" ? x.k !== "resp" : x.k === filt);
+    }).sort(function (a, b) { return sortKey(a.r).localeCompare(sortKey(b.r)); });
+    return '<section class="card"><h2>Oficios</h2><p class="fine">Carga cada oficio con una foto, una imagen o un PDF. El estado se pone solo: pasa a «Inspección realizada» cuando creas la inspección o experticia con el mismo número de oficio, y a «Respondido» cuando descargas el informe en PDF de ese trabajo. Nada se marca a mano.</p>' +
+      '<div class="btns" style="display:grid;gap:8px;margin:10px 0"><button type="button" class="primary" data-a="load">Cargar oficio (foto, imagen o PDF)</button><button type="button" data-a="manual">Agregar a mano</button></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 0">' + chip("todos", "Todos", c.todos) + chip("pend", "Sin respuesta", c.pend) + chip("rec", "Sin inspección", c.rec) + chip("insp", "Falta informe", c.insp) + chip("resp", "Respondidos", c.resp) + "</div>" +
+      (items.length ? "" : '<p class="hint">' + (c.todos ? "No hay oficios en este filtro." : "Aún no hay oficios. Carga el primero con el botón de arriba.") + "</p>") +
+      '<ul class="ilist">' + items.map(function (x) {
+        var r = x.r;
+        return '<li><div class="t">' + esc(r.oficio || "Oficio sin número") + '<div class="sub">' + esc([r.fechaOf ? "del " + ff(r.fechaOf) : "", r.recibido ? "recibido " + ff(r.recibido) : "", r.fiscalia, r.causa].filter(has).join(" · ")) + "</div>" +
+          (has(r.lugar) ? '<div class="sub">' + esc(r.lugar) + "</div>" : "") + '<div style="margin-top:4px">' + badge(x.k) + "</div></div>" +
+          '<div class="item-actions"><button type="button" class="primary" style="min-height:44px;font-size:16px" data-open="' + r.id + '">Abrir</button></div></li>';
+      }).join("") + "</ul>" +
+      '<div class="btns" style="display:grid;gap:8px;margin-top:14px"><button type="button" data-a="pdf">Reporte PDF: oficios sin respuesta</button><button type="button" data-a="xlsx">Exportar todos a Excel</button>' +
+      '<button type="button" class="quiet" data-a="bak">Guardar respaldo de la lista</button><button type="button" class="quiet" data-a="rest">Restaurar respaldo</button></div>' +
+      '<p class="fine">El respaldo guarda los datos de los oficios, no las fotos ni los PDF originales.</p></section>';
+  }
+  var FIELDS = [["oficio", "Número de oficio", "text"], ["fechaOf", "Fecha del oficio", "date"], ["recibido", "Fecha en que se recibió", "date"], ["causa", "Causa penal", "text"], ["fiscalia", "Fiscalía", "text"], ["fiscal", "Fiscal solicitante", "text"], ["investigado", "Investigado(a)", "text"], ["delitos", "Delitos", "area"], ["lugar", "Lugar de los hechos", "area"], ["diligencias", "Diligencias solicitadas", "area"], ["obs", "Observaciones", "area"]];
+  function renderDetail(r) {
+    var e = estado(r), l = e.l;
+    var h = '<section class="card"><button type="button" class="quiet" data-a="back">← Volver a la lista</button><h2>' + esc(r.oficio || "Oficio") + "</h2><div>" + badge(e.k) + "</div>";
+    h += '<p class="fine">' + (e.k === "rec" ? "Aún no hay inspección ni experticia con este número de oficio." : e.k === "insp" ? "Hay inspección o experticia con este oficio. Pasa a «Respondido» cuando descargues su informe en PDF." : "Ya se descargó el informe en PDF de este oficio.") + "</p>";
+    h += '<div class="btns" style="display:grid;gap:8px;margin:10px 0">' +
+      (r.fileId ? '<button type="button" data-a="orig">Ver oficio original (' + esc(r.fileName || "archivo") + ")</button>" : "") +
+      '<button type="button" class="primary" data-a="mkinsp">Crear inspección MP con estos datos</button><button type="button" data-a="mkexp">Crear experticia con estos datos</button></div>';
+    if (l.insp.length || l.exp.length) {
+      h += '<p class="fine"><b>Trabajos vinculados:</b></p><ul class="ilist">' +
+        l.insp.map(function (i) { return '<li><div class="t">Inspección MP · ' + esc(ff(i.g && i.g.fecha)) + '<div class="sub">' + (i.pdfAt ? "Informe PDF descargado" : "Informe PDF pendiente") + "</div></div></li>"; }).join("") +
+        l.exp.map(function (i) { return '<li><div class="t">Experticia · ' + esc(ff(i.fecha)) + '<div class="sub">' + (i.pdfAt ? "Informe PDF descargado" : "Informe PDF pendiente") + "</div></div></li>"; }).join("") + "</ul>";
+    }
+    FIELDS.forEach(function (f) {
+      var id = "ofi_" + f[0], v = r[f[0]] || "";
+      h += '<div class="field"><label for="' + id + '">' + f[1] + "</label>" + (f[2] === "area" ? '<textarea id="' + id + '" data-k="' + f[0] + '">' + esc(v) + "</textarea>" : '<input id="' + id + '" data-k="' + f[0] + '" type="' + f[2] + '" value="' + esc(v) + '">') + "</div>";
+    });
+    h += '<div class="btns" style="display:grid;gap:8px;margin-top:14px"><button type="button" class="quiet danger" data-a="del">Eliminar este oficio</button></div></section>';
+    return h;
+  }
+  function render() {
+    view.innerHTML = cur && find(cur) ? renderDetail(find(cur)) : (cur = null, renderList());
+    if (!cur) { var n = $("countOfi"); if (n) n.textContent = S.items.length + (S.items.length === 1 ? " oficio" : " oficios"); }
+  }
+
+  /* ---------- crear / cargar ---------- */
+  function newRec(v, file) {
+    var r = { id: uid(), creado: today() };
+    FIELDS.forEach(function (f) { r[f[0]] = v && v[f[0]] ? v[f[0]] : ""; });
+    if (r.oficio) r.oficio = "N° " + r.oficio.replace(/^N\S{0,3}\s*/i, "");
+    S.items.push(r);
+    var done = function () { persist(true); cur = r.id; render(); window.scrollTo(0, 0); };
+    if (file) {
+      shrinkImg(file).then(function (b) { r.fileId = r.id; r.fileName = file.name || (/pdf/.test(file.type) ? "oficio.pdf" : "oficio.jpg"); r.fileType = b.type || file.type; return putFile(r.id, b); }).then(done, done);
+    } else done();
+  }
+  function doLoad() {
+    if (!A.oficio) { toast("El lector de oficios no está disponible aquí."); return; }
+    A.oficio.open({ apply: function (v, file) { newRec(v, file); toast("Oficio guardado"); } });
+  }
+  function viewOrig(r) {
+    getFile(r.fileId).then(function (b) {
+      if (!b) { toast("No se encontró el archivo original en este teléfono."); return; }
+      var u = URL.createObjectURL(b), w = window.open(u, "_blank");
+      if (!w) { var a = document.createElement("a"); a.href = u; a.download = r.fileName || "oficio"; document.body.appendChild(a); a.click(); a.remove(); }
+      setTimeout(function () { URL.revokeObjectURL(u); }, 60000);
+    });
+  }
+
+  /* ---------- reportes ---------- */
+  function pendientes() {
+    return S.items.map(function (r) { return { r: r, k: estado(r).k }; }).filter(function (x) { return x.k !== "resp"; })
+      .sort(function (a, b) { return sortKey(a.r).localeCompare(sortKey(b.r)); });
+  }
+  function exportPdf() {
+    var X = A.pdf; if (!X) { toast("El generador de PDF no está disponible."); return; }
+    var list = pendientes(), P; try { P = new X.Doc(); } catch (er) { toast(er.message); return; }
+    var e = X.esc;
+    P.title("REPORTE DE OFICIOS PENDIENTES DE RESPUESTA", "Unidad Técnica Ecosocialista (UTEC) Apure", "Al " + X.fmtDate(today()));
+    var c = counts();
+    P.p("Oficios recibidos registrados: " + c.todos + ". Sin respuesta: " + c.pend + " (sin inspección: " + c.rec + "; con inspección realizada y falta el informe: " + c.insp + "). Respondidos: " + c.resp + ".");
+    if (!list.length) { P.p("No hay oficios pendientes de respuesta."); }
+    else {
+      P.h("Oficios sin respuesta");
+      P.table(["N.º", "Oficio", "Fecha", "Fiscalía / fiscal", "Causa", "Lugar", "Estado"],
+        list.map(function (x, n) {
+          var r = x.r;
+          return [String(n + 1), e(r.oficio || ""), e(ff(r.recibido || r.fechaOf)), e([r.fiscalia, r.fiscal].filter(has).join(", ")), e(r.causa || ""), e(r.lugar || ""), x.k === "rec" ? "Sin inspección" : "Falta informe"];
+        }), [22, 84, 48, 88, 60, 68, 72], ["l", "l", "l", "l", "l", "l", "l"], { fs: 7.5 });
+    }
+    P.p("El estado se determina por los trabajos registrados con el mismo número de oficio: «Sin inspección» cuando no hay inspección ni experticia, y «Falta informe» cuando existe el trabajo pero no se ha descargado su informe en PDF.", { fs: 9 });
+    P.save("oficios-pendientes_" + today() + ".pdf");
+  }
+  function exportXlsx() {
+    if (typeof XLSX === "undefined") { toast("El generador de Excel no está disponible."); return; }
+    var rows = [["N.º", "Oficio", "Fecha del oficio", "Recibido", "Fiscalía", "Fiscal", "Causa", "Investigado(a)", "Delitos", "Lugar", "Diligencias", "Estado", "Observaciones"]];
+    S.items.slice().sort(function (a, b) { return sortKey(a).localeCompare(sortKey(b)); }).forEach(function (r, n) {
+      rows.push([n + 1, r.oficio, ff(r.fechaOf), ff(r.recibido), r.fiscalia, r.fiscal, r.causa, r.investigado, r.delitos, r.lugar, r.diligencias, LAB[estado(r).k], r.obs]);
+    });
+    var ws = XLSX.utils.aoa_to_sheet(rows); ws["!cols"] = [5, 24, 14, 14, 30, 30, 18, 30, 30, 36, 40, 30, 30].map(function (w) { return { wch: w }; });
+    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Oficios");
+    var out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    if (A.deliver) A.deliver("oficios_" + today() + ".xlsx", out, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  }
+  function backup() {
+    var data = new TextEncoder().encode(JSON.stringify({ tipo: "oficios", items: S.items }, null, 1));
+    if (A.deliver) A.deliver("oficios-respaldo_" + today() + ".json", data.buffer, "application/json");
+  }
+  var rin = null;
+  function restore() {
+    if (!rin) {
+      rin = document.createElement("input"); rin.type = "file"; rin.accept = "application/json,.json"; rin.style.cssText = "position:fixed;left:-9999px;width:1px;height:1px;opacity:0";
+      document.body.appendChild(rin);
+      rin.addEventListener("change", function () {
+        var f = rin.files && rin.files[0]; rin.value = ""; if (!f) return;
+        f.text().then(function (t) {
+          var j = JSON.parse(t), n = 0;
+          (j.items || []).forEach(function (x) { if (x && x.id && !find(x.id)) { delete x.fileId; S.items.push(x); n++; } });
+          persist(true); render(); toast(n + " oficios restaurados");
+        }).catch(function () { toast("El archivo no es un respaldo válido."); });
+      });
+    }
+    rin.click();
+  }
+
+  /* ---------- eventos ---------- */
+  view.addEventListener("input", function (e) {
+    var k = e.target.getAttribute && e.target.getAttribute("data-k"), r = cur && find(cur); if (!k || !r) return;
+    r[k] = e.target.value; persist();
+  });
+  var delArm = false;
+  view.addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    var a = b.getAttribute("data-a"), f = b.getAttribute("data-f"), o = b.getAttribute("data-open"), r = cur && find(cur);
+    if (f) { filt = f; render(); return; }
+    if (o) { cur = o; render(); window.scrollTo(0, 0); return; }
+    if (a === "load") doLoad();
+    else if (a === "manual") newRec({}, null);
+    else if (a === "back") { persist(true); cur = null; render(); }
+    else if (a === "orig" && r) viewOrig(r);
+    else if (a === "mkinsp" && r) { persist(true); if (A.insp) A.insp.createFrom(r); }
+    else if (a === "mkexp" && r) { persist(true); if (A.exp) A.exp.createFrom(r); }
+    else if (a === "del" && r) {
+      if (!delArm) { delArm = true; b.textContent = "Toca otra vez para eliminar"; setTimeout(function () { delArm = false; if (b.isConnected) b.textContent = "Eliminar este oficio"; }, 3500); return; }
+      delArm = false; delFile(r.id); S.items = S.items.filter(function (x) { return x.id !== r.id; }); persist(true); cur = null; render(); toast("Oficio eliminado");
+    }
+    else if (a === "pdf") exportPdf();
+    else if (a === "xlsx") exportXlsx();
+    else if (a === "bak") backup();
+    else if (a === "rest") restore();
+  });
+  /* al entrar a la sección se recalcula el estado con lo último guardado */
+  var nav = $("navOfi"); if (nav) nav.addEventListener("click", function () { persist(true); cur = null; render(); });
+  A.ofi = { list: function () { return S.items; }, estado: estado };
+  render();
 })();
 </script>
 <script>if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){navigator.serviceWorker.register("sw.js").catch(function(){});}</script></body></html>
