@@ -2489,6 +2489,179 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
 })();
 </script>
 <script>(function () {
+  var A = window.APP = window.APP || {};
+  var DAT_CANOA = "La Canoa (se convierte a WGS84)", DAT_WGS = "REGVEN / WGS84 (sin conversión)";
+  var NEAR = 20; /* m: la conversión de datum tiene unos 15 m de error */
+
+  /* ---------- UTM -> geográficas -> otro datum ---------- */
+  function utmInv(N, E, zone, a, f) {
+    var k0 = 0.9996, e2 = f * (2 - f), ep2 = e2 / (1 - e2), x = E - 500000, M = N / k0;
+    var mu = M / (a * (1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256));
+    var e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+    var p1 = mu + (3 * e1 / 2 - 27 * Math.pow(e1, 3) / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * Math.pow(e1, 4) / 32) * Math.sin(4 * mu) + (151 * Math.pow(e1, 3) / 96) * Math.sin(6 * mu) + (1097 * Math.pow(e1, 4) / 512) * Math.sin(8 * mu);
+    var s = Math.sin(p1), c = Math.cos(p1), t = Math.tan(p1);
+    var C1 = ep2 * c * c, T1 = t * t, N1 = a / Math.sqrt(1 - e2 * s * s), R1 = a * (1 - e2) / Math.pow(1 - e2 * s * s, 1.5), D = x / (N1 * k0);
+    var phi = p1 - (N1 * t / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * Math.pow(D, 4) / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * Math.pow(D, 6) / 720);
+    var lon0 = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180;
+    var lam = lon0 + (D - (1 + 2 * T1 + C1) * Math.pow(D, 3) / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 + 24 * T1 * T1) * Math.pow(D, 5) / 120) / c;
+    return { lat: phi, lon: lam };
+  }
+  /* La Canoa (Internacional 1924) -> WGS84: EPSG 1096, rotación de vector de posición, precisión ~15 m en Venezuela */
+  function canoaToWgs(lat, lon) {
+    var a = 6378388, f = 1 / 297, e2 = f * (2 - f), s = Math.sin(lat), c = Math.cos(lat), N = a / Math.sqrt(1 - e2 * s * s);
+    var X = N * c * Math.cos(lon), Y = N * c * Math.sin(lon), Z = N * (1 - e2) * s;
+    var as = Math.PI / 648000, rx = -5.266 * as, ry = -1.238 * as, rz = 2.381 * as, k = 1 - 5.109e-6;
+    var X2 = -270.933 + k * (X - rz * Y + ry * Z), Y2 = 115.599 + k * (rz * X + Y - rx * Z), Z2 = -360.226 + k * (-ry * X + rx * Y + Z);
+    var aw = 6378137, fw = 1 / 298.257223563, ew = fw * (2 - fw), p = Math.sqrt(X2 * X2 + Y2 * Y2), la = Math.atan2(Z2, p * (1 - ew));
+    for (var q = 0; q < 6; q++) { var Nw = aw / Math.sqrt(1 - ew * Math.sin(la) * Math.sin(la)); la = Math.atan2(Z2 + ew * Nw * Math.sin(la), p); }
+    return { lat: la * 180 / Math.PI, lon: Math.atan2(Y2, X2) * 180 / Math.PI };
+  }
+  function vertToUtm(N, E, datum, zone) {
+    if (datum !== DAT_CANOA) return { N: N, E: E };
+    var g = utmInv(N, E, zone, 6378388, 1 / 297), w = canoaToWgs(g.lat, g.lon), u = A.toUTM(w.lat, w.lon);
+    return { N: u.N, E: u.E };
+  }
+
+  /* ---------- lectura del cuadro de vértices ---------- */
+  function parseTxt(txt) {
+    var out = [];
+    String(txt || "").split(/\n+/).forEach(function (l) {
+      var m = l.match(/\d+(?:[.,]\d+)?/g); if (!m || m.length < 2) return;
+      var nums = m.map(function (x) { return parseFloat(x.replace(",", ".")); });
+      var E = nums[nums.length - 1], N = nums[nums.length - 2];
+      if (isFinite(N) && isFinite(E) && N > 1000 && E > 1000) out.push([N, E]);
+    });
+    return out;
+  }
+  function parsePdfText(t) {
+    var re = /(?:^|\s)(\d{1,3})\s+(\d{6,7})\s+(\d{6})(?=\s|$)/g, m, seen = {}, rows = [];
+    while ((m = re.exec(t))) { var v = +m[1]; if (!seen[v]) { seen[v] = 1; rows.push([v, +m[2], +m[3]]); } re.lastIndex = m.index + m[0].length - 1; }
+    rows.sort(function (a, b) { return a[0] - b[0]; });
+    return rows;
+  }
+  function area(v) { var s = 0; for (var i = 0; i < v.length; i++) { var a = v[i], b = v[(i + 1) % v.length]; s += a[1] * b[0] - b[1] * a[0]; } return Math.abs(s) / 2 / 10000; }
+
+  /* ---------- polígono en WGS84 (se recalcula solo si cambian los datos) ---------- */
+  var memo = { k: "", poly: null };
+  function poly(i) {
+    var P = i && i.pred; if (!P || !String(P.txt || "").trim()) return null;
+    var zone = parseInt(i.cs && i.cs.huso, 10) || 19, k = P.datum + "|" + zone + "|" + P.txt;
+    if (memo.k === k) return memo.poly;
+    var v = parseTxt(P.txt), pl = null;
+    if (v.length >= 3 && A.toUTM) pl = v.map(function (x) { var u = vertToUtm(x[0], x[1], P.datum, zone); return [u.E, u.N]; });
+    memo = { k: k, poly: pl }; return pl;
+  }
+  function inside(pt, pl) {
+    var c = false;
+    for (var i = 0, j = pl.length - 1; i < pl.length; j = i++) {
+      var xi = pl[i][0], yi = pl[i][1], xj = pl[j][0], yj = pl[j][1];
+      if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  function dist(pt, pl) {
+    var best = Infinity;
+    for (var i = 0, j = pl.length - 1; i < pl.length; j = i++) {
+      var ax = pl[j][0], ay = pl[j][1], bx = pl[i][0], by = pl[i][1], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? ((pt[0] - ax) * dx + (pt[1] - ay) * dy) / L : 0;
+      t = Math.max(0, Math.min(1, t)); var px = ax + t * dx, py = ay + t * dy, d = Math.sqrt((pt[0] - px) * (pt[0] - px) + (pt[1] - py) * (pt[1] - py)); if (d < best) best = d;
+    }
+    return best;
+  }
+  function ptOf(i, a) {
+    var n = parseFloat(String(a.norte || "").replace(",", ".")), e = parseFloat(String(a.este || "").replace(",", "."));
+    if (!isFinite(n) || !isFinite(e)) return null;
+    if (i.cs && i.cs.sistema === "UTM") return [e, n];
+    if (!A.toUTM) return null; var u = A.toUTM(n, e); return [u.E, u.N];
+  }
+  /* estado de un árbol: { k: "in"|"near"|"out"|"none", d: metros al lindero } */
+  function status(i, a) {
+    var pl = poly(i); if (!pl) return null;
+    var pt = ptOf(i, a); if (!pt) return { k: "none" };
+    var ins = inside(pt, pl), d = dist(pt, pl);
+    return { k: d < NEAR ? (ins ? "near" : "nearout") : ins ? "in" : "out", d: Math.round(d), ins: ins };
+  }
+  function msg(i, a) {
+    var s = status(i, a); if (!s) return "";
+    if (s.k === "none") return "Croquis cargado: falta la coordenada del árbol para verificar.";
+    if (s.k === "in") return '<b style="color:#1d5a38">✔ Dentro del predio</b> · a ' + s.d + " m del lindero más cercano.";
+    if (s.k === "out") return '<b style="color:#b00020">✖ FUERA del predio</b> · a ' + s.d + " m del lindero más cercano.";
+    return '<b style="color:#a55a00">⚠ ' + (s.ins ? "Dentro" : "Fuera") + " del predio, pero a solo " + s.d + " m del lindero.</b> Revísalo en sitio: el croquis y el GPS pueden diferir unos 15 m.";
+  }
+  var LN = { arboles: "riesgo", aprovArb: "aprovechamiento", salv: "salvamento" };
+  function count(i) {
+    var r = { in: 0, near: 0, out: 0, none: 0, fuera: [], cerca: [] };
+    if (!poly(i)) return null;
+    ["arboles", "aprovArb", "salv"].forEach(function (k) {
+      (i[k] || []).forEach(function (a, n) {
+        var s = status(i, a), lab = "N.º " + (n + 1) + (a.especie ? " " + a.especie : "") + " (" + LN[k] + ")";
+        if (s.k === "none") r.none++; else if (s.k === "in") r.in++; else if (s.k === "out") { r.out++; r.fuera.push(lab + ", a " + s.d + " m"); } else { r.near++; r.cerca.push(lab + ", " + (s.ins ? "dentro" : "fuera") + " a " + s.d + " m"); }
+      });
+    });
+    return r;
+  }
+  function summary(i) {
+    var c = count(i); if (!c) return "";
+    var h = "<b>Verificación con el croquis:</b> " + c.in + " dentro, " + c.near + " cerca del lindero, " + c.out + " fuera, " + c.none + " sin coordenadas.";
+    if (c.out) h += '<br><b style="color:#b00020">Fuera del predio:</b> ' + c.fuera.join("; ") + ".";
+    return h;
+  }
+  function info(i) {
+    var P = i && i.pred; if (!P) return "";
+    var v = parseTxt(P.txt); if (!String(P.txt || "").trim()) return "";
+    if (v.length < 3) return '<b style="color:#b00020">Se necesitan al menos 3 vértices.</b> Hay ' + v.length + ".";
+    return v.length + " vértices · área calculada " + area(v).toFixed(2).replace(".", ",") + " ha. Compárala con la superficie que dice el croquis.";
+  }
+
+  /* ---------- leer el croquis en PDF ---------- */
+  var PDFB = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/", libP = null;
+  function loadLib() {
+    if (window.pdfjsLib) return Promise.resolve();
+    if (libP) return libP;
+    libP = new Promise(function (ok, no) {
+      var s = document.createElement("script"); s.src = PDFB + "pdf.min.js"; s.async = true;
+      s.onload = function () { if (window.pdfjsLib) { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFB + "pdf.worker.min.js"; ok(); } else no(new Error("net")); };
+      s.onerror = function () { libP = null; no(new Error("net")); };
+      document.head.appendChild(s);
+    });
+    return libP;
+  }
+  function readPdf(file) {
+    return loadLib().then(function () { return file.arrayBuffer(); }).then(function (buf) { return window.pdfjsLib.getDocument({ data: buf }).promise; }).then(function (doc) {
+      var all = "", chain = Promise.resolve();
+      for (var p = 1; p <= Math.min(doc.numPages, 4); p++) (function (n) {
+        chain = chain.then(function () { return doc.getPage(n); }).then(function (pg) { return pg.getTextContent(); }).then(function (tc) { all += tc.items.map(function (x) { return x.str; }).join(" ") + "\n"; });
+      })(p);
+      return chain.then(function () {
+        var rows = parsePdfText(all);
+        return { rows: rows, canoa: /la\s+canoa/i.test(all), huso: (/huso\s*(\d{2})/i.exec(all) || [])[1] || "" };
+      });
+    });
+  }
+  var inp = null;
+  function pick(cb) {
+    if (!inp) {
+      inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/pdf,.pdf,image/*";
+      inp.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0"; inp.setAttribute("aria-hidden", "true"); inp.tabIndex = -1;
+      document.body.appendChild(inp);
+    }
+    inp.onchange = function () { var f = inp.files && inp.files[0]; inp.value = ""; if (f) cb(f); };
+    inp.click();
+  }
+  function load(cb) {
+    pick(function (f) {
+      if (!(f.type === "application/pdf" || /\.pdf$/i.test(f.name || ""))) { cb({ err: "Una imagen no se puede leer sola. Escribe o pega los vértices del cuadro del croquis, uno por línea (Norte y Este)." }); return; }
+      readPdf(f).then(function (r) {
+        if (r.rows.length < 3) { cb({ err: "No se encontró el cuadro de coordenadas en el PDF. Escribe o pega los vértices a mano." }); return; }
+        cb({ txt: r.rows.map(function (x) { return x[1] + " " + x[2]; }).join("\n"), n: r.rows.length, canoa: r.canoa, huso: r.huso, name: f.name });
+      }, function (e) { cb({ err: e && e.message === "net" ? "No se pudo descargar el lector de PDF. Revisa tu internet o escribe los vértices a mano." : "No se pudo leer el PDF." }); });
+    });
+  }
+
+  A.predio = { DAT_CANOA: DAT_CANOA, DAT_WGS: DAT_WGS, msg: msg, summary: summary, info: info, count: count, load: load, parseTxt: parseTxt, parsePdfText: parsePdfText, status: status, poly: poly, _t: { vertToUtm: vertToUtm, utmInv: utmInv, canoaToWgs: canoaToWgs, area: area } };
+  if (typeof module !== "undefined") module.exports = A.predio;
+})();
+</script>
+<script>(function () {
   var A = window.APP || {};
   var KEY = "regional114-v1";
   var $ = function (id) { return document.getElementById(id); };
@@ -2536,6 +2709,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       sol: { nombre: "", ci: "", tel: "" },
       cs: { sistema: "UTM", datum: "", huso: "" },
       puntos: [{ v: "PU", este: "", norte: "", obs: "Punto de ubicación del predio" }],
+      pred: { datum: "La Canoa (se convierte a WGS84)", txt: "", arch: "" },
       desc: "",
       sitio: { ubic: "", tenDoc: "", tenReg: "", tenFecha: "", tenNota: "", sup: "", acceso: "", hidro: "", uso: "", bnat: "", bplant: "" },
       arboles: [], aprovArb: [], salv: [], riesgo: { noVedada: "", obs: "" },
@@ -2671,7 +2845,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     if (p === "puntos" || p === "arboles") { row.norte = pr.n; row.este = pr.e; if (pr.zone && !cur().cs.huso) cur().cs.huso = pr.zone; }
     else if (p === "fotos") row.gps = pr.txt;
   }
-  function setField(p, v) { setP(cur(), p, v); var el = $(fid(p)); if (el) el.value = v; persist(); }
+  function setField(p, v) { setP(cur(), p, v); var el = $(fid(p)); if (el) el.value = v; persist(); if (/\.(norte|este)$/.test(p)) refreshPred(); }
 
   /* ---------- piezas de formulario ---------- */
   function F(p, label, o) {
@@ -2712,7 +2886,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     } else inner += R2(F(b + "vol", "Volumen (m³)", { mode: "decimal" }), F(b + "altura", "Altura comercial (m)", { mode: "decimal" })) + F(b + "cap", "CAP (cm), si se conoce", { mode: "decimal" });
     inner += '<div class="calc" id="arv' + key + n + '"></div>' +
       R2(F(b + "norte", cur().cs.sistema === "UTM" ? "Norte (m)" : "Latitud", { mode: "decimal" }), F(b + "este", cur().cs.sistema === "UTM" ? "Este (m)" : "Longitud", { mode: "decimal" })) +
-      '<button type="button" data-gpspt="' + key + "." + n + '">Tomar GPS del árbol</button>' + F(b + "obs", "Observación", { area: 1 }) + treePhotos(a, n, key);
+      '<button type="button" data-gpspt="' + key + "." + n + '">Tomar GPS del árbol</button><div class="calc" id="pst' + key + n + '"></div>' + F(b + "obs", "Observación", { area: 1 }) + treePhotos(a, n, key);
     return rowCard("Árbol N° " + (n + 1), key + "." + n, inner);
   }
   var GOPTS = ["", "Dura (50 cm)", "Semidura (60 cm)", "Blanda (70 cm)", "Samán (105 cm)"], GLAB = { 50: "Dura (50 cm)", 60: "Semidura (60 cm)", 70: "Blanda (70 cm)", 105: "Samán (105 cm)" };
@@ -2794,7 +2968,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
         var b = "puntos." + n + ".";
         return rowCard("Punto " + (n + 1), "puntos." + n, F(b + "v", "Vértice (PU, V1, V2…)") + R2(F(b + "este", labE, { mode: "decimal" }), F(b + "norte", labN, { mode: "decimal" })) + F(b + "obs", "Observación") +
           '<button type="button" data-gpspt="puntos.' + n + '">Tomar GPS</button>');
-      }).join("") + addBtn("puntos", "Agregar punto");
+      }).join("") + addBtn("puntos", "Agregar punto") +
+      sub("Croquis del predio (límites)") + '<p class="hint">Carga el croquis en PDF: la app lee el cuadro de coordenadas y, al tomar los puntos de los árboles, te dice si están dentro del predio. También puedes escribir o pegar los vértices (Norte y Este, uno por línea).</p>' +
+      '<button type="button" data-croq="1">Cargar croquis (PDF)</button>' + (i.pred && i.pred.arch ? '<p class="fine">Croquis: ' + esc(i.pred.arch) + "</p>" : "") +
+      F("pred.datum", "Datum de las coordenadas del croquis", { opts: A.predio ? [A.predio.DAT_CANOA, A.predio.DAT_WGS] : [""] }) +
+      F("pred.txt", "Vértices del lindero (Norte Este, uno por línea)", { area: 1, rows: 200 }) + '<div class="calc" id="predInfo"></div><div class="calc" id="predSum"></div>';
     var s2 = '<p class="hint">Describe la solicitud: número, fecha, solicitante, especie y motivo.</p>' + F("desc", "Descripción general de la solicitud", { area: 1, rows: 150 });
     var s3 = F("sitio.ubic", "Ubicación y actividad económica", { area: 1 }) + sub("Tenencia de la tierra") +
       R2(F("sitio.tenDoc", "Documento de tenencia N°"), F("sitio.tenFecha", "Fecha del documento", { type: "date" })) + F("sitio.tenReg", "Registro u ente que lo emite") + F("sitio.tenNota", "Observación sobre la tenencia (carta agraria, título)", { area: 1 }) +
@@ -2822,7 +3000,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
   function render() {
     $("countR114").textContent = S.items.length + (S.items.length === 1 ? " informe" : " informes");
     view.innerHTML = cur() ? renderForm() : renderList();
-    if (cur()) { LISTS.forEach(function (k) { cur()[k].forEach(function (a, n) { updateArbol(k, n); }); updateTotal(k); }); hydrateImgs(); }
+    if (cur()) { LISTS.forEach(function (k) { cur()[k].forEach(function (a, n) { updateArbol(k, n); }); updateTotal(k); }); hydrateImgs(); refreshPred(); }
+  }
+  /* Croquis: dice si cada árbol está dentro del predio */
+  function refreshPred() {
+    var i = cur(); if (!i) return;
+    if (!i.pred) i.pred = { datum: A.predio ? A.predio.DAT_CANOA : "", txt: "", arch: "" };
+    var Pd = A.predio; if (!Pd) return;
+    LISTS.forEach(function (k) { i[k].forEach(function (a, n) { var el = $("pst" + k + n); if (el) el.innerHTML = Pd.msg(i, a); }); });
+    var s = $("predSum"); if (s) s.innerHTML = Pd.summary(i);
+    var f = $("predInfo"); if (f) f.innerHTML = Pd.info(i);
   }
 
   /* ---------- revisión ---------- */
@@ -2977,6 +3164,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
         if (notes.length) { P.p("**Aviso legal.**", { after: 2 }); P.list(notes); }
       });
       if (String(i.riesgo.obs || "").trim()) { H("Observaciones generales"); paras(i.riesgo.obs); }
+      var pc = A.predio && A.predio.count(i), pn = pc ? pc.in + pc.near + pc.out + pc.none : 0;
+      if (pc && pn > 0) {
+        P.need(90);
+        P.p("**Verificación de la ubicación con el croquis del predio.** De " + pn + (pn === 1 ? " árbol registrado, " : " árboles registrados, ") + pc.in + (pc.in === 1 ? " se ubica" : " se ubican") + " dentro del predio" + (pc.near ? ", " + pc.near + " cerca del lindero (a menos de 20 m)" : "") + ", " + pc.out + " fuera" + (pc.none ? " y " + pc.none + " sin coordenadas" : "") + "." + (i.pred && i.pred.datum === A.predio.DAT_CANOA ? " Las coordenadas del croquis (datum La Canoa) se convirtieron a WGS84 para compararlas con las del GPS; la conversión tiene una precisión aproximada de 15 m." : ""), { just: true });
+        if (pc.fuera.length) { P.p("**Árboles fuera del predio:**", { after: 2 }); P.list(pc.fuera.map(e)); }
+        if (pc.cerca.length) { P.p("**Árboles cerca del lindero (revisar en sitio):**", { after: 2 }); P.list(pc.cerca.map(e)); }
+      }
       var cnt = [["arboles", "Árboles en riesgo"], ["aprovArb", "Árboles de aprovechamiento"], ["salv", "Árboles de salvamento"]].map(function (L) { return [L[1], i[L[0]].length]; }).filter(function (x) { return x[1] > 0; });
       var nTot = 0; cnt.forEach(function (x) { nTot += x[1]; });
       if (nTot > 0) {
@@ -3025,6 +3219,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     var el = e.target, p = el.getAttribute && el.getAttribute("data-p");
     if (!p || !cur()) return;
     setP(cur(), p, el.value); persist();
+    if (/\.(norte|este)$/.test(p) || /^pred\./.test(p) || p === "cs.huso") refreshPred();
     if (p === "cs.sistema" || /\.metodo$/.test(p)) { render(); return; }
     var m = /^(arboles|aprovArb|salv)\.(\d+)\./.exec(p);
     if (m) {
@@ -3060,6 +3255,17 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     }
     if ((a = b.getAttribute("data-del"))) {
       twoTap(b, function () { var ks = a.split("."), idx = +ks.pop(), arr = getP(cur(), ks.join(".")); if (arr[idx] && arr[idx].img) delImg(arr[idx].img); if (arr[idx] && arr[idx].fotos) arr[idx].fotos.forEach(function (x) { if (x.img) delImg(x.img); }); arr.splice(idx, 1); persist(true); render(); });
+      return;
+    }
+    if (b.hasAttribute("data-croq")) {
+      if (!A.predio) { toast("El lector de croquis no está disponible."); return; }
+      b.disabled = true;
+      A.predio.load(function (r) {
+        b.disabled = false; if (r.err) { toast(r.err); return; }
+        var p = cur().pred = cur().pred || {}; p.txt = r.txt; p.arch = r.name || ""; if (r.canoa) p.datum = A.predio.DAT_CANOA;
+        if (r.huso && !String(cur().cs.huso || "").trim()) cur().cs.huso = r.huso;
+        persist(true); render(); toast(r.n + " vértices leídos. Revisa el cuadro.");
+      });
       return;
     }
     if ((a = b.getAttribute("data-gps"))) { b.disabled = true; getPos(function (co) { setField(a, pair(co).txt); }, function () { b.disabled = false; }); return; }

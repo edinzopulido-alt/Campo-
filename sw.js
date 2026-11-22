@@ -1,4 +1,4 @@
-const C="campo-1794469004";
+const C="campo-1795307638";
 const FILES=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 const VC="campo-vendor";
